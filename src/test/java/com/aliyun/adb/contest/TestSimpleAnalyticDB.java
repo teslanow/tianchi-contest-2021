@@ -57,8 +57,9 @@ public class TestSimpleAnalyticDB {
                 String column = resultStr[1];
                 double percentile = Double.valueOf(resultStr[2]);
                 String answer = resultStr[3];
-
-                Assert.assertEquals(answer, analyticDB.quantile(table, column, percentile));
+                String gotAnswer = analyticDB.quantile(table, column, percentile);
+                System.out.println("" + answer.equals(gotAnswer)+ " expected " + answer + " got " + gotAnswer);
+                Assert.assertEquals(answer, gotAnswer);
             }
         } catch (Throwable t) {
             throw new RuntimeException(t);

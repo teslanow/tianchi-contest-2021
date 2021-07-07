@@ -16,10 +16,10 @@ import java.util.concurrent.CountDownLatch;
 public class SimpleAnalyticDB implements AnalyticDB {
 
     private static final int BOUNDARYSIZE = 130;
-    private static final int THREADNUM = 12;
-    private static final int DATALENGTH = 1000000000;
+    private static final int THREADNUM = 4;
+    private static final int DATALENGTH = 10000;
     private static final int BYTEBUFFERSIZE = 1024 * 64;
-    private static final int EACHREADSIZE = 16 * 1024 * 1024;
+    private static final int EACHREADSIZE = 1024;
     private String curTableName;
     private Unsafe unsafe = null;
     private final int[][] blockSize = new int[2][BOUNDARYSIZE];
@@ -33,6 +33,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
     @Override
     public void load(String tpchDataFileDir, String workspaceDir) throws Exception {
+        workDir = workspaceDir;
         Field f = Unsafe.class.getDeclaredField("theUnsafe");
         f.setAccessible(true);
         unsafe = (Unsafe)f.get(null);
@@ -63,7 +64,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         int pos = 0;
         for (int i = 0; i < THREADNUM; i++){
             StringBuilder builder = new StringBuilder(workDir);
-            String fileName = builder.append("/").append(table).append(column).append(i).append("-").append(index).toString();
+            String fileName = builder.append("/").append(table).append("-").append(column).append(i).append("-").append(index).toString();
             FileInputStream inFile = new FileInputStream(fileName);
             FileChannel channel = inFile.getChannel();
             long size = channel.size();
@@ -75,8 +76,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
         }
         ans = MyFind.quickFind(data, 0, pos - 1, rankDiff).toString();
 //        System.out.println("Query:" + table + ", " + column + ", " + percentile + " Answer:" + rank + ", " + ans);
-//        return ans;
-        return "0";
+        return ans;
+        //return "0";
     }
 
     private void loadStore(File dataFile) throws Exception {
@@ -100,6 +101,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 new Thread(new ThreadTask(i,hasReadByte,(size - hasReadByte), channel)).start();
                 break;
             }
+            byteBuffer.clear();
             channel.read(byteBuffer, hasReadByte + sizePerBuffer - 42);
             int needMove = 0;
             for(int j = 41; j >= 0; j--) {
@@ -118,19 +120,16 @@ public class SimpleAnalyticDB implements AnalyticDB {
         System.out.println(end - sss);
 
         //flush
-        int index, lBry = 0, rBry = 0;
+        int  lBry = 0, rBry = 0;
         for (int i = 0; i < BOUNDARYSIZE; i++){
             beginOrder[0][i] = lBry + 1;
             lBry += blockSize[0][i];
             beginOrder[1][i] = rBry + 1;
             rBry += blockSize[1][i];
         }
+        System.out.println("" + ( beginOrder[0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[1][BOUNDARYSIZE - 1] - 1) );
     }
 
-
-    private String tableColumnKey(String table, String column) {
-        return (table + "." + column).toLowerCase();
-    }
 
     class ThreadTask implements Runnable {
         long readStart;
@@ -160,6 +159,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
         @Override
         public void run() {
+            int leftReadNum = 0, rightReadNum = 0;
             try{
                 String outLDir, outRDir;
                 File LoutFile, RoutFile;
@@ -169,7 +169,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     builder = new StringBuilder(workDir);
                     outLDir = builder.append("/").append(curTableName).append("-").append("L_ORDERKEY").append(threadNo).append("-").append(i).toString();
                     builder = new StringBuilder(workDir);
-                    outRDir = builder.append("/").append(curTableName).append("-").append("/L_PARTKEY").append(threadNo).append("-").append(i).toString();
+                    outRDir = builder.append("/").append(curTableName).append("-").append("L_PARTKEY").append(threadNo).append("-").append(i).toString();
                     LoutFile = new File(outLDir);
                     RoutFile = new File(outRDir);
                     Lrw = new RandomAccessFile(LoutFile, "rw");
@@ -184,10 +184,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     rightBufs[i].order(ByteOrder.LITTLE_ENDIAN);
                 }
                 long nowRead = 0, realRead, yuzhi = trueSizeOfMmap - EACHREADSIZE;
+
                 while(nowRead < yuzhi) {
                     realRead = EACHREADSIZE;
                     directBuffer.clear();
-                    fileChannel.read(directBuffer, realRead + nowRead);
+                    fileChannel.read(directBuffer, readStart + nowRead);
                     for(int i = (int)realRead-1; i >= 0; i--) {
                         if(unsafe.getByte(directBufferBase + i) != 10) {
                             realRead--;
@@ -203,6 +204,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         t = unsafe.getByte(directBufferBase + index);
                         if((t & 16) == 0) {
                             if(t == 44) {
+                                leftReadNum++;
                                 int leftIndex = (int)(val >> 56);
                                 leftBufs[leftIndex].putLong(val);
                                 position = leftBufs[leftIndex].position();
@@ -212,6 +214,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 }
                                 val = 0;
                             }else {
+                                rightReadNum++;
                                 int rightIndex = (int)(val >> 56);
                                 rightBufs[rightIndex].putLong(val);
                                 position = rightBufs[rightIndex].position();
@@ -229,7 +232,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 }
                 realRead = trueSizeOfMmap - nowRead;
                 directBuffer.clear();
-                fileChannel.read(directBuffer, realRead + nowRead);
+                fileChannel.read(directBuffer, readStart + nowRead);
                 nowRead += realRead;
                 long val = 0;
                 int position;
@@ -238,6 +241,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     t = unsafe.getByte(directBufferBase + index);
                     if((t & 16) == 0) {
                         if(t == 44) {
+                            leftReadNum++;
                             int leftIndex = (int)(val >> 56);
                             leftBufs[leftIndex].putLong(val);
                             position = leftBufs[leftIndex].position();
@@ -247,6 +251,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             }
                             val = 0;
                         }else {
+                            rightReadNum++;
                             int rightIndex = (int)(val >> 56);
                             rightBufs[rightIndex].putLong(val);
                             position = rightBufs[rightIndex].position();
@@ -265,14 +270,18 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 for(int i = 0; i < BOUNDARYSIZE; i++) {
                     leftChannel[i].write(leftBufs[i].array(),0 ,leftBufs[i].position());
                     rightChannel[i].write(rightBufs[i].array(),0 ,rightBufs[i].position());
-                    blockSize[0][i] += leftChannel[i].getChannel().size() >> 3;
-                    blockSize[1][i] += rightChannel[i].getChannel().size() >> 3;
+                    synchronized (blockSize)
+                    {
+                        blockSize[0][i] += leftChannel[i].getChannel().size() >> 3;
+                        blockSize[1][i] += rightChannel[i].getChannel().size() >> 3;
+                    }
+
 
                 }
             }catch (Exception e){
                 e.printStackTrace();
             }
-
+            System.out.println("thread " + threadNo + " " + leftReadNum + " " + rightReadNum);
             latch.countDown();
         }
 
