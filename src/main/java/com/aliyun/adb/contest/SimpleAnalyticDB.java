@@ -10,39 +10,80 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 
 public class SimpleAnalyticDB implements AnalyticDB {
 
     private static final int BOUNDARYSIZE = 130;
-    private static final int THREADNUM = 4;
+    private static final int THREADNUM = 1;
     private static final int DATALENGTH = 10000;
     private static final int BYTEBUFFERSIZE = 1024 * 64;
     private static final int EACHREADSIZE = 1024;
+    private static final int TABLENUM = 2;
+    private static final int COLNUM_EACHTABLE = 2;
+    private String[][] colName = new String[TABLENUM][COLNUM_EACHTABLE];
+    private String[] tabName = new String[TABLENUM];
     private String curTableName;
-    private Unsafe unsafe = null;
-    private final int[][] blockSize = new int[2][BOUNDARYSIZE];
-    private final int[][] beginOrder = new int[2][BOUNDARYSIZE];
+    private Unsafe unsafe;
+    private final int[][][] blockSize = new int[TABLENUM][COLNUM_EACHTABLE][BOUNDARYSIZE];
+    private final int[][][] beginOrder = new int[TABLENUM][COLNUM_EACHTABLE][BOUNDARYSIZE];
 
     private static final CountDownLatch latch = new CountDownLatch(THREADNUM);
     private  String workDir;
     
-    public SimpleAnalyticDB() {
+    public SimpleAnalyticDB() throws NoSuchFieldException, IllegalAccessException {
+        this.unsafe = GetUnsafe.getUnsafe();
     }
 
     @Override
     public void load(String tpchDataFileDir, String workspaceDir) throws Exception {
         workDir = workspaceDir;
-        Field f = Unsafe.class.getDeclaredField("theUnsafe");
-        f.setAccessible(true);
-        unsafe = (Unsafe)f.get(null);
-        File dir = new File(tpchDataFileDir);
-        for (File dataFile : dir.listFiles()) {
-            System.out.println("Start loading table " + dataFile.getName());
-            curTableName = dataFile.getName();
-            loadStore(dataFile);
+        //判断工作区是否为空
+        if(new File(workspaceDir + "/index").exists())
+        {
+            RandomAccessFile file = new RandomAccessFile(new File(workDir + "/index"), "r");
+            FileChannel fileChannel = file.getChannel();
+            byte[] bytes = new byte[(int)fileChannel.size()];
+            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
+            byteBuffer.clear();
+            fileChannel.read(byteBuffer);
+            byteBuffer.flip();
+            int curPos = 0;
+            String[] tmpString = new String[TABLENUM * COLNUM_EACHTABLE];
+            for(int pre = 0, index = 0;;)
+            {
+                if(bytes[curPos] == 10)
+                {
+                    tmpString[index++] = new String(bytes, pre, curPos - pre, "UTF-8");
+                    if(index >= TABLENUM * COLNUM_EACHTABLE)
+                    {
+                        curPos++;
+                        break;
+                    }
+                    pre = curPos + 1;
+                }
+                curPos++;
+            }
+            int index_name = 0;
+            for(int i = 0; i < TABLENUM; i++)
+            {
+                tabName[i] = tmpString[index_name++];
+                for(int j = 0; j < COLNUM_EACHTABLE; j++)
+                {
+                    colName[i][j] = tmpString[index_name++];
+                    for( int k = 0; k < BOUNDARYSIZE; k++)
+                    {
+                        beginOrder[i][j][k] = byteBuffer.getInt();
+                    }
+                }
+            }
+            return;
         }
+        File dir = new File(tpchDataFileDir);
+        loadStore(dir.listFiles());
     }
 
     @Override
@@ -50,8 +91,25 @@ public class SimpleAnalyticDB implements AnalyticDB {
         String ans;
         int rank = (int) Math.round(DATALENGTH * percentile);
         int index;
-        int flag = column.equals("L_ORDERKEY") ? 0 : 1;
-        int retIndex = Arrays.binarySearch(beginOrder[flag],rank);
+        int flag_table, flag_colum;
+        if(table.equals(tabName[0]))
+        {
+            flag_table = 0;
+        }
+        else
+        {
+            flag_table = 1;
+        }
+        if(column.equals(colName[flag_table][0]))
+        {
+            flag_colum = 0;
+        }
+        else
+        {
+            flag_colum = 1;
+        }
+        int[] curBeginOrder = beginOrder[flag_table][flag_colum];
+        int retIndex = Arrays.binarySearch(curBeginOrder,rank);
         if (retIndex >= 0) {
             index = retIndex;
         }
@@ -59,8 +117,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
             index = - retIndex - 2;
         }
         int rankDiff;
-        rankDiff = rank - beginOrder[flag][index]+ 1;
-        long[] data = new long[blockSize[flag][index]];
+        rankDiff = rank - curBeginOrder[index]+ 1;
+        int data_length = index == BOUNDARYSIZE - 1 ? (DATALENGTH + 1 - curBeginOrder[index]):  curBeginOrder[index + 1] - curBeginOrder[index] ;
+        long[] data = new long[data_length];
         int pos = 0;
         for (int i = 0; i < THREADNUM; i++){
             StringBuilder builder = new StringBuilder(workDir);
@@ -75,68 +134,119 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
         }
         ans = MyFind.quickFind(data, 0, pos - 1, rankDiff).toString();
-//        System.out.println("Query:" + table + ", " + column + ", " + percentile + " Answer:" + rank + ", " + ans);
         return ans;
-        //return "0";
     }
 
-    private void loadStore(File dataFile) throws Exception {
-        long sss = System.currentTimeMillis();
-        RandomAccessFile fis = new RandomAccessFile(dataFile, "r");
-        FileChannel channel = fis.getChannel();
-        long size = channel.size();
-        byte[] st = new byte[21];
-//        String line = new String(st, 0, 20);
-//        System.out.println(line);
-        for (int i = 0; i < BOUNDARYSIZE; i++){
-            beginOrder[0][i] = 0;
-            beginOrder[1][i] = 0;
+    private void loadStore(File[] dataFileList) throws Exception {
+        for(int j = 0; j < TABLENUM; j++)
+        {
+            for (int i = 0; i < BOUNDARYSIZE; i++){
+                beginOrder[j][0][i] = 0;
+                beginOrder[j][1][i] = 0;
+            }
         }
-        long hasReadByte = 21;
-        long sizePerBuffer = size / THREADNUM;
+        long[][] readStartEachThread = new long[THREADNUM][TABLENUM];
+        long[][] trueSizeOfMmapEachThread = new long[THREADNUM][TABLENUM];
+        FileChannel[] allFileChannel = new FileChannel[TABLENUM];
         byte[] bytes = new byte[42];
         ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
-        for(int i = 0; i < THREADNUM; i++) {
-            if(i == THREADNUM - 1) {
-                new Thread(new ThreadTask(i,hasReadByte,(size - hasReadByte), channel)).start();
-                break;
-            }
+        for(int k = 0; k < dataFileList.length; k++)
+        {
+            File dataFile = dataFileList[k];
+            RandomAccessFile fis = new RandomAccessFile(dataFile, "r");
+            FileChannel channel = fis.getChannel();
+            allFileChannel[k] = channel;
+            long size = channel.size();
+            long sizePerBuffer = size / THREADNUM;
             byteBuffer.clear();
-            channel.read(byteBuffer, hasReadByte + sizePerBuffer - 42);
-            int needMove = 0;
-            for(int j = 41; j >= 0; j--) {
-                if(bytes[j] != 10) {
-                    needMove++;
-                } else {
+            channel.read(byteBuffer);
+            long hasReadByte = 0;
+            for(int i = 0, pre = 0, j = 0; i < 42; i++)
+            {
+                byte t = bytes[i];
+                hasReadByte++;
+                if(t == 44)
+                {
+                    colName[k][j++] = new String(bytes, pre, i, "UTF-8");
+                    pre = i + 1;
+                }
+                else if(bytes[i] == 10)
+                {
+                    colName[k][j++] = new String(bytes, pre, i - pre, "UTF-8");
+                    hasReadByte++;
                     break;
                 }
             }
-            new Thread(new ThreadTask(i, hasReadByte,(sizePerBuffer-needMove), channel)).start();
-            hasReadByte += (sizePerBuffer-needMove);
+            tabName[k] = dataFile.getName();
+            for(int i = 0; i < THREADNUM; i++)
+            {
+                if(i == THREADNUM - 1)
+                {
+                    readStartEachThread[i][k] = hasReadByte;
+                    trueSizeOfMmapEachThread[i][k] = size - hasReadByte;
+                    break;
+                }
+                byteBuffer.clear();
+                channel.read(byteBuffer, hasReadByte + sizePerBuffer - 42);
+                int needMove = 0;
+                for(int j = 41; j >= 0; j--) {
+                    if(bytes[j] != 10) {
+                        needMove++;
+                    } else {
+                        break;
+                    }
+                }
+                readStartEachThread[i][k] = hasReadByte;
+                trueSizeOfMmapEachThread[i][k] = sizePerBuffer - needMove;
+                hasReadByte += (sizePerBuffer-needMove);
+            }
         }
-
+        for(int i = 0; i < THREADNUM; i++)
+        {
+            new Thread(new ThreadTask(i, readStartEachThread[i], trueSizeOfMmapEachThread[i], allFileChannel)).start();
+        }
         latch.await();
-        long end = System.currentTimeMillis();
-        System.out.println(end - sss);
 
-        //flush
-        int  lBry = 0, rBry = 0;
-        for (int i = 0; i < BOUNDARYSIZE; i++){
-            beginOrder[0][i] = lBry + 1;
-            lBry += blockSize[0][i];
-            beginOrder[1][i] = rBry + 1;
-            rBry += blockSize[1][i];
+        StringBuilder builder= new StringBuilder(workDir + "/index");
+        FileOutputStream fileOutputStream = new FileOutputStream(new File(builder.toString()));
+        for(int i = 0; i < TABLENUM; i++)
+        {
+            fileOutputStream.write(tabName[i].getBytes(StandardCharsets.UTF_8));
+            fileOutputStream.write("\n".getBytes(StandardCharsets.UTF_8));
+            for(int j = 0; j < COLNUM_EACHTABLE; j++)
+            {
+                fileOutputStream.write(colName[i][j].getBytes(StandardCharsets.UTF_8));
+                fileOutputStream.write("\n".getBytes(StandardCharsets.UTF_8));
+            }
         }
-        System.out.println("" + ( beginOrder[0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[1][BOUNDARYSIZE - 1] - 1) );
+        for(int j = 0; j < TABLENUM; j++)
+        {
+            int  lBry = 0, rBry = 0;
+            for (int i = 0; i < BOUNDARYSIZE; i++){
+                beginOrder[j][0][i] = lBry + 1;
+                fileOutputStream.write(lBry + 1);
+                lBry += blockSize[j][0][i];
+
+            }
+            for(int i = 0; i < BOUNDARYSIZE; i++)
+            {
+                beginOrder[j][1][i] = rBry + 1;
+                fileOutputStream.write(rBry + 1);
+                rBry += blockSize[j][1][i];
+            }
+        }
+
+        System.out.println("table 0 " + ( beginOrder[0][0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[0][1][BOUNDARYSIZE - 1] - 1) );
+        System.out.println("table 1 " + ( beginOrder[1][0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[1][1][BOUNDARYSIZE - 1] - 1) );
     }
 
 
     class ThreadTask implements Runnable {
-        long readStart;
-        long trueSizeOfMmap;
+        long[] readStart;
+        long[] trueSizeOfMmap;
         int threadNo;
         long directBufferBase;
-        FileChannel fileChannel;
+        FileChannel[] fileChannel;
         ByteBuffer directBuffer;
         FileOutputStream[] leftChannel;
         FileOutputStream[] rightChannel;
@@ -144,7 +254,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         ByteBuffer[] rightBufs;
 
         //初始化
-        public ThreadTask(int threadNo, long readStart ,long trueSizeOfMmap, FileChannel fileChannel) throws Exception {
+        public ThreadTask(int threadNo, long[] readStart ,long[] trueSizeOfMmap, FileChannel[] fileChannel) throws Exception {
             this.threadNo = threadNo;
             this.readStart = readStart;
             this.trueSizeOfMmap = trueSizeOfMmap;
@@ -159,43 +269,83 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
         @Override
         public void run() {
-            int leftReadNum = 0, rightReadNum = 0;
+            //int leftReadNum = 0, rightReadNum = 0;
             try{
-                String outLDir, outRDir;
-                File LoutFile, RoutFile;
-                RandomAccessFile Lrw, Rrw;
-                StringBuilder builder;
-                for (int i = 0; i < BOUNDARYSIZE; i++) {
-                    builder = new StringBuilder(workDir);
-                    outLDir = builder.append("/").append(curTableName).append("-").append("L_ORDERKEY").append(threadNo).append("-").append(i).toString();
-                    builder = new StringBuilder(workDir);
-                    outRDir = builder.append("/").append(curTableName).append("-").append("L_PARTKEY").append(threadNo).append("-").append(i).toString();
-                    LoutFile = new File(outLDir);
-                    RoutFile = new File(outRDir);
-                    Lrw = new RandomAccessFile(LoutFile, "rw");
-                    Rrw = new RandomAccessFile(RoutFile, "rw");
-                    Lrw.setLength(8*600000); //length need change
-                    Rrw.setLength(8*600000);
-                    leftChannel[i] = new FileOutputStream(LoutFile);
-                    rightChannel[i] = new FileOutputStream(RoutFile);
-                    leftBufs[i] = ByteBuffer.allocate(BYTEBUFFERSIZE);
-                    leftBufs[i].order(ByteOrder.LITTLE_ENDIAN);
-                    rightBufs[i] = ByteBuffer.allocate(BYTEBUFFERSIZE);
-                    rightBufs[i].order(ByteOrder.LITTLE_ENDIAN);
-                }
-                long nowRead = 0, realRead, yuzhi = trueSizeOfMmap - EACHREADSIZE;
-
-                while(nowRead < yuzhi) {
-                    realRead = EACHREADSIZE;
-                    directBuffer.clear();
-                    fileChannel.read(directBuffer, readStart + nowRead);
-                    for(int i = (int)realRead-1; i >= 0; i--) {
-                        if(unsafe.getByte(directBufferBase + i) != 10) {
-                            realRead--;
-                        } else {
-                            break;
+                for(int k = 0; k < TABLENUM; k++)
+                {
+                    String outLDir, outRDir;
+                    File LoutFile, RoutFile;
+                    RandomAccessFile Lrw, Rrw;
+                    StringBuilder builder;
+                    curTableName = tabName[k];
+                    for (int i = 0; i < BOUNDARYSIZE; i++) {
+                        builder = new StringBuilder(workDir);
+                        outLDir = builder.append("/").append(curTableName).append("-").append(colName[k][0]).append(threadNo).append("-").append(i).toString();
+                        builder = new StringBuilder(workDir);
+                        outRDir = builder.append("/").append(curTableName).append("-").append(colName[k][1]).append(threadNo).append("-").append(i).toString();
+                        LoutFile = new File(outLDir);
+                        RoutFile = new File(outRDir);
+                        Lrw = new RandomAccessFile(LoutFile, "rw");
+                        Rrw = new RandomAccessFile(RoutFile, "rw");
+                        Lrw.setLength(8*600000); //length need change
+                        Rrw.setLength(8*600000);
+                        leftChannel[i] = new FileOutputStream(LoutFile);
+                        rightChannel[i] = new FileOutputStream(RoutFile);
+                        leftBufs[i] = ByteBuffer.allocate(BYTEBUFFERSIZE);
+                        leftBufs[i].order(ByteOrder.LITTLE_ENDIAN);
+                        rightBufs[i] = ByteBuffer.allocate(BYTEBUFFERSIZE);
+                        rightBufs[i].order(ByteOrder.LITTLE_ENDIAN);
+                    }
+                    long nowRead = 0, realRead, yuzhi = trueSizeOfMmap[k] - EACHREADSIZE;
+                    long curReadStart = readStart[k];
+                    while(nowRead < yuzhi) {
+                        realRead = EACHREADSIZE;
+                        directBuffer.clear();
+                        fileChannel[k].read(directBuffer, curReadStart + nowRead);
+                        for(int i = (int)realRead-1; i >= 0; i--) {
+                            if(unsafe.getByte(directBufferBase + i) != 10) {
+                                realRead--;
+                            } else {
+                                break;
+                            }
+                        }
+                        nowRead += realRead;
+                        long val = 0;
+                        int position;
+                        byte t;
+                        for(int index = 0; index < realRead; index++) {
+                            t = unsafe.getByte(directBufferBase + index);
+                            if((t & 16) == 0) {
+                                if(t == 44) {
+                                    //leftReadNum++;
+                                    int leftIndex = (int)(val >> 56);
+                                    leftBufs[leftIndex].putLong(val);
+                                    position = leftBufs[leftIndex].position();
+                                    if (position >= BYTEBUFFERSIZE) {
+                                        leftChannel[leftIndex].write(leftBufs[leftIndex].array(), 0, position);
+                                        leftBufs[leftIndex].clear();
+                                    }
+                                    val = 0;
+                                }else {
+                                    //rightReadNum++;
+                                    int rightIndex = (int)(val >> 56);
+                                    rightBufs[rightIndex].putLong(val);
+                                    position = rightBufs[rightIndex].position();
+                                    if (position >= BYTEBUFFERSIZE) {
+                                        rightChannel[rightIndex].write(rightBufs[rightIndex].array(), 0, position);
+                                        rightBufs[rightIndex].clear();
+                                    }
+                                    val = 0;
+                                }
+                            }
+                            else {
+                                val = val * 10 + (t - 48);
+                            }
                         }
                     }
+                    realRead = trueSizeOfMmap[k] - nowRead;
+                    directBuffer.clear();
+                    fileChannel[k].read(directBuffer, curReadStart + nowRead);
                     nowRead += realRead;
                     long val = 0;
                     int position;
@@ -204,7 +354,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         t = unsafe.getByte(directBufferBase + index);
                         if((t & 16) == 0) {
                             if(t == 44) {
-                                leftReadNum++;
+                                //leftReadNum++;
                                 int leftIndex = (int)(val >> 56);
                                 leftBufs[leftIndex].putLong(val);
                                 position = leftBufs[leftIndex].position();
@@ -214,7 +364,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 }
                                 val = 0;
                             }else {
-                                rightReadNum++;
+                                //rightReadNum++;
                                 int rightIndex = (int)(val >> 56);
                                 rightBufs[rightIndex].putLong(val);
                                 position = rightBufs[rightIndex].position();
@@ -229,59 +379,21 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             val = val * 10 + (t - 48);
                         }
                     }
-                }
-                realRead = trueSizeOfMmap - nowRead;
-                directBuffer.clear();
-                fileChannel.read(directBuffer, readStart + nowRead);
-                nowRead += realRead;
-                long val = 0;
-                int position;
-                byte t;
-                for(int index = 0; index < realRead; index++) {
-                    t = unsafe.getByte(directBufferBase + index);
-                    if((t & 16) == 0) {
-                        if(t == 44) {
-                            leftReadNum++;
-                            int leftIndex = (int)(val >> 56);
-                            leftBufs[leftIndex].putLong(val);
-                            position = leftBufs[leftIndex].position();
-                            if (position >= BYTEBUFFERSIZE) {
-                                leftChannel[leftIndex].write(leftBufs[leftIndex].array(), 0, position);
-                                leftBufs[leftIndex].clear();
-                            }
-                            val = 0;
-                        }else {
-                            rightReadNum++;
-                            int rightIndex = (int)(val >> 56);
-                            rightBufs[rightIndex].putLong(val);
-                            position = rightBufs[rightIndex].position();
-                            if (position >= BYTEBUFFERSIZE) {
-                                rightChannel[rightIndex].write(rightBufs[rightIndex].array(), 0, position);
-                                rightBufs[rightIndex].clear();
-                            }
-                            val = 0;
+
+                    for(int i = 0; i < BOUNDARYSIZE; i++) {
+                        leftChannel[i].write(leftBufs[i].array(),0 ,leftBufs[i].position());
+                        rightChannel[i].write(rightBufs[i].array(),0 ,rightBufs[i].position());
+                        synchronized (blockSize[k])
+                        {
+                            blockSize[k][0][i] += leftChannel[i].getChannel().size() >> 3;
+                            blockSize[k][1][i] += rightChannel[i].getChannel().size() >> 3;
                         }
                     }
-                    else {
-                        val = val * 10 + (t - 48);
-                    }
-                }
-
-                for(int i = 0; i < BOUNDARYSIZE; i++) {
-                    leftChannel[i].write(leftBufs[i].array(),0 ,leftBufs[i].position());
-                    rightChannel[i].write(rightBufs[i].array(),0 ,rightBufs[i].position());
-                    synchronized (blockSize)
-                    {
-                        blockSize[0][i] += leftChannel[i].getChannel().size() >> 3;
-                        blockSize[1][i] += rightChannel[i].getChannel().size() >> 3;
-                    }
-
-
                 }
             }catch (Exception e){
                 e.printStackTrace();
             }
-            System.out.println("thread " + threadNo + " " + leftReadNum + " " + rightReadNum);
+            //System.out.println("thread " + threadNo + " " + leftReadNum + " " + rightReadNum);
             latch.countDown();
         }
 
