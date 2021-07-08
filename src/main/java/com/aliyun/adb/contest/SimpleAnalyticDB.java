@@ -38,6 +38,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
     @Override
     public void load(String tpchDataFileDir, String workspaceDir) throws Exception {
+        long ss = System.currentTimeMillis();
         workDir = workspaceDir;
         //判断工作区是否为空
         if(new File(workspaceDir + "/index").exists())
@@ -83,6 +84,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
         }
         File dir = new File(tpchDataFileDir);
         loadStore(dir.listFiles());
+        long end = System.currentTimeMillis();
+        System.out.println("load time is " + (end - ss));
     }
 
     @Override
