@@ -5,12 +5,10 @@ import sun.misc.Unsafe;
 import sun.nio.ch.DirectBuffer;
 
 import java.io.*;
-import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
@@ -18,10 +16,10 @@ import java.util.concurrent.CountDownLatch;
 public class SimpleAnalyticDB implements AnalyticDB {
 
     private static final int BOUNDARYSIZE = 130;
-    private static final int THREADNUM = 1;
-    private static final int DATALENGTH = 10000;
+    private static final int THREADNUM = 16;
+    private static final int DATALENGTH = 1000000000;
     private static final int BYTEBUFFERSIZE = 1024 * 64;
-    private static final int EACHREADSIZE = 1024;
+    private static final int EACHREADSIZE = 1024 * 1024 * 16;
     private static final int TABLENUM = 2;
     private static final int COLNUM_EACHTABLE = 2;
     private String[][] colName = new String[TABLENUM][COLNUM_EACHTABLE];
@@ -52,13 +50,13 @@ public class SimpleAnalyticDB implements AnalyticDB {
             fileChannel.read(byteBuffer);
             byteBuffer.flip();
             int curPos = 0;
-            String[] tmpString = new String[TABLENUM * COLNUM_EACHTABLE];
+            String[] tmpString = new String[TABLENUM * COLNUM_EACHTABLE + TABLENUM];
             for(int pre = 0, index = 0;;)
             {
                 if(bytes[curPos] == 10)
                 {
                     tmpString[index++] = new String(bytes, pre, curPos - pre, "UTF-8");
-                    if(index >= TABLENUM * COLNUM_EACHTABLE)
+                    if(index >= TABLENUM * COLNUM_EACHTABLE + TABLENUM)
                     {
                         curPos++;
                         break;
@@ -68,6 +66,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 curPos++;
             }
             int index_name = 0;
+            byteBuffer.position(curPos);
             for(int i = 0; i < TABLENUM; i++)
             {
                 tabName[i] = tmpString[index_name++];
@@ -132,6 +131,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
             for(int j = 0; j < size; j +=8 ) {
                 data[pos++] = mappedByteBuffer.getLong(j);
             }
+            inFile.close();
         }
         ans = MyFind.quickFind(data, 0, pos - 1, rankDiff).toString();
         return ans;
@@ -208,15 +208,15 @@ public class SimpleAnalyticDB implements AnalyticDB {
         latch.await();
 
         StringBuilder builder= new StringBuilder(workDir + "/index");
-        FileOutputStream fileOutputStream = new FileOutputStream(new File(builder.toString()));
+        FileChannel fileChannel = new RandomAccessFile(new File(builder.toString()), "rw").getChannel();
         for(int i = 0; i < TABLENUM; i++)
         {
-            fileOutputStream.write(tabName[i].getBytes(StandardCharsets.UTF_8));
-            fileOutputStream.write("\n".getBytes(StandardCharsets.UTF_8));
+            fileChannel.write(ByteBuffer.wrap(tabName[i].getBytes(StandardCharsets.UTF_8)));
+            fileChannel.write(ByteBuffer.wrap("\n".getBytes(StandardCharsets.UTF_8)));
             for(int j = 0; j < COLNUM_EACHTABLE; j++)
             {
-                fileOutputStream.write(colName[i][j].getBytes(StandardCharsets.UTF_8));
-                fileOutputStream.write("\n".getBytes(StandardCharsets.UTF_8));
+                fileChannel.write(ByteBuffer.wrap(colName[i][j].getBytes(StandardCharsets.UTF_8)));
+                fileChannel.write(ByteBuffer.wrap("\n".getBytes(StandardCharsets.UTF_8)));
             }
         }
         for(int j = 0; j < TABLENUM; j++)
@@ -224,18 +224,26 @@ public class SimpleAnalyticDB implements AnalyticDB {
             int  lBry = 0, rBry = 0;
             for (int i = 0; i < BOUNDARYSIZE; i++){
                 beginOrder[j][0][i] = lBry + 1;
-                fileOutputStream.write(lBry + 1);
                 lBry += blockSize[j][0][i];
-
-            }
-            for(int i = 0; i < BOUNDARYSIZE; i++)
-            {
                 beginOrder[j][1][i] = rBry + 1;
-                fileOutputStream.write(rBry + 1);
                 rBry += blockSize[j][1][i];
             }
         }
-
+        byte[] b_t = new byte[BOUNDARYSIZE * Integer.SIZE];
+        ByteBuffer b_t_buffer = ByteBuffer.wrap(b_t);
+        for(int i = 0; i < TABLENUM; i++)
+        {
+            for(int j = 0; j < COLNUM_EACHTABLE; j++)
+            {
+                b_t_buffer.clear();
+                for(int k = 0; k < BOUNDARYSIZE; k++)
+                {
+                    b_t_buffer.putInt(beginOrder[i][j][k]);
+                }
+                b_t_buffer.flip();
+                fileChannel.write(b_t_buffer);
+            }
+        }
         System.out.println("table 0 " + ( beginOrder[0][0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[0][1][BOUNDARYSIZE - 1] - 1) );
         System.out.println("table 1 " + ( beginOrder[1][0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[1][1][BOUNDARYSIZE - 1] - 1) );
     }
@@ -388,6 +396,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             blockSize[k][0][i] += leftChannel[i].getChannel().size() >> 3;
                             blockSize[k][1][i] += rightChannel[i].getChannel().size() >> 3;
                         }
+                    }
+                    for(int i = 0; i < BOUNDARYSIZE; i++)
+                    {
+                        leftChannel[i].close();
+                        rightChannel[i].close();
                     }
                 }
             }catch (Exception e){
