@@ -253,6 +253,13 @@ public class SimpleAnalyticDB implements AnalyticDB {
         }
         System.out.println("table 0 " + ( beginOrder[0][0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[0][1][BOUNDARYSIZE - 1] - 1) );
         System.out.println("table 1 " + ( beginOrder[1][0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[1][1][BOUNDARYSIZE - 1] - 1) );
+        for(int i = 0; i < TABLENUM; i++)
+        {
+            for(int j = 0; j < COLNUM_EACHTABLE; j++)
+            {
+                System.out.println(Arrays.toString(beginOrder[i][j]));
+            }
+        }
     }
 
 
