@@ -135,6 +135,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
             long size = channel.size();
             MappedByteBuffer mappedByteBuffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, size);
             mappedByteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+            mappedByteBuffer.position(0);
             for(int j = 0; j < size; j +=8 ) {
                 data[pos++] = mappedByteBuffer.getLong(j);
             }
@@ -143,6 +144,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         System.out.println("realsize: " + pos);
         ans = MyFind.quickFind(data, 0, pos - 1, rankDiff).toString();
         long e1 = System.currentTimeMillis();
+        System.out.println(Arrays.toString(data));
         System.out.println("one quantile time is " + (e1 - s1) + " rank "+ rank + " index " + index + " ans "+ ans + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum]);
         return ans;
     }
