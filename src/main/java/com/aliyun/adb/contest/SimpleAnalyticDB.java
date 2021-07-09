@@ -43,6 +43,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         //判断工作区是否为空
         if(new File(workspaceDir + "/index").exists())
         {
+            System.out.println("sencond load");
             RandomAccessFile file = new RandomAccessFile(new File(workDir + "/index"), "r");
             FileChannel fileChannel = file.getChannel();
             byte[] bytes = new byte[(int)fileChannel.size()];
@@ -90,6 +91,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
     @Override
     public String quantile(String table, String column, double percentile) throws Exception {
+        long s1 = System.currentTimeMillis();
         String ans;
         int rank = (int) Math.round(DATALENGTH * percentile);
         int index;
@@ -137,6 +139,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
             inFile.close();
         }
         ans = MyFind.quickFind(data, 0, pos - 1, rankDiff).toString();
+        long e1 = System.currentTimeMillis();
+        System.out.println("one quantile time is " + (e1 - s1) + " rank "+ rank + " ans "+ ans);
         return ans;
     }
 
