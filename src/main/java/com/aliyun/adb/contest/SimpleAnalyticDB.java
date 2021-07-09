@@ -15,8 +15,8 @@ import java.util.concurrent.CountDownLatch;
 
 public class SimpleAnalyticDB implements AnalyticDB {
 
-    private static final int BOUNDARYSIZE = 130;
-    private static final int THREADNUM = 16;
+    private static final int BOUNDARYSIZE = 260;
+    private static final int THREADNUM = 24;
     private static final int DATALENGTH = 1000000000;
     private static final int BYTEBUFFERSIZE = 1024 * 64;
     private static final int EACHREADSIZE = 1024 * 1024 * 16;
@@ -144,7 +144,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
         System.out.println("realsize: " + pos);
         ans = MyFind.quickFind(data, 0, pos - 1, rankDiff).toString();
         long e1 = System.currentTimeMillis();
-        System.out.println(Arrays.toString(data));
         System.out.println("one quantile time is " + (e1 - s1) + " rank "+ rank + " index " + index + " ans "+ ans + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum]);
         return ans;
     }
@@ -325,8 +324,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         RoutFile = new File(outRDir);
                         Lrw = new RandomAccessFile(LoutFile, "rw");
                         Rrw = new RandomAccessFile(RoutFile, "rw");
-                        Lrw.setLength(8*60000); //length need change
-                        Rrw.setLength(8*60000);
+                        Lrw.setLength(8*30000); //length need change
+                        Rrw.setLength(8*30000);
                         leftChannel[i] = new FileOutputStream(LoutFile);
                         rightChannel[i] = new FileOutputStream(RoutFile);
                         leftBufs[i] = ByteBuffer.allocate(BYTEBUFFERSIZE);
@@ -356,7 +355,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             if((t & 16) == 0) {
                                 if(t == 44) {
                                     //leftReadNum++;
-                                    int leftIndex = (int)(val >> 56);
+                                    int leftIndex = (int)(val >> 55);
                                     leftBufs[leftIndex].putLong(val);
                                     position = leftBufs[leftIndex].position();
                                     if (position >= BYTEBUFFERSIZE) {
@@ -366,7 +365,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     val = 0;
                                 }else {
                                     //rightReadNum++;
-                                    int rightIndex = (int)(val >> 56);
+                                    int rightIndex = (int)(val >> 55);
                                     rightBufs[rightIndex].putLong(val);
                                     position = rightBufs[rightIndex].position();
                                     if (position >= BYTEBUFFERSIZE) {
@@ -393,7 +392,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         if((t & 16) == 0) {
                             if(t == 44) {
                                 //leftReadNum++;
-                                int leftIndex = (int)(val >> 56);
+                                int leftIndex = (int)(val >> 55);
                                 leftBufs[leftIndex].putLong(val);
                                 position = leftBufs[leftIndex].position();
                                 if (position >= BYTEBUFFERSIZE) {
@@ -403,7 +402,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 val = 0;
                             }else {
                                 //rightReadNum++;
-                                int rightIndex = (int)(val >> 56);
+                                int rightIndex = (int)(val >> 55);
                                 rightBufs[rightIndex].putLong(val);
                                 position = rightBufs[rightIndex].position();
                                 if (position >= BYTEBUFFERSIZE) {
@@ -417,13 +416,13 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             val = val * 10 + (t - 48);
                         }
                     }
-                    for (int i = 0; i < BOUNDARYSIZE; i++){
-                        leftChannel[i].flush();
-                        rightChannel[i].flush();
-                    }
+
                     for(int i = 0; i < BOUNDARYSIZE; i++) {
+
                         leftChannel[i].write(leftBufs[i].array(),0 ,leftBufs[i].position());
+                        leftChannel[i].flush();
                         rightChannel[i].write(rightBufs[i].array(),0 ,rightBufs[i].position());
+                        rightChannel[i].flush();
                         synchronized (blockSize[k])
                         {
                             blockSize[k][0][i] += leftChannel[i].getChannel().size() >> 3;
