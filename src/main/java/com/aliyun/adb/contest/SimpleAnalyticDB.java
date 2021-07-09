@@ -140,7 +140,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         }
         ans = MyFind.quickFind(data, 0, pos - 1, rankDiff).toString();
         long e1 = System.currentTimeMillis();
-        System.out.println("one quantile time is " + (e1 - s1) + " rank "+ rank + " ans "+ ans);
+        System.out.println("one quantile time is " + (e1 - s1) + " rank "+ rank + " index " + index + " ans "+ ans + " table " + tabName[flag_table] + " column " + colName[flag_colum]);
         return ans;
     }
 
