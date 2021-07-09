@@ -90,7 +90,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     }
 
     @Override
-    public String quantile(String table, String column, double percentile) throws Exception {
+    public synchronized String quantile(String table, String column, double percentile) throws Exception {
         long s1 = System.currentTimeMillis();
         String ans;
         System.out.println("percential" + percentile);
@@ -401,7 +401,10 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             val = val * 10 + (t - 48);
                         }
                     }
-
+                    for (int i = 0; i < BOUNDARYSIZE; i++){
+                        leftChannel[i].flush();
+                        rightChannel[i].flush();
+                    }
                     for(int i = 0; i < BOUNDARYSIZE; i++) {
                         leftChannel[i].write(leftBufs[i].array(),0 ,leftBufs[i].position());
                         rightChannel[i].write(rightBufs[i].array(),0 ,rightBufs[i].position());
