@@ -124,6 +124,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         int rankDiff;
         rankDiff = rank - curBeginOrder[index]+ 1;
         int data_length = index == BOUNDARYSIZE - 1 ? (DATALENGTH + 1 - curBeginOrder[index]):  curBeginOrder[index + 1] - curBeginOrder[index] ;
+        System.out.println("blocksize: "+ data_length);
         long[] data = new long[data_length];
         int pos = 0;
         for (int i = 0; i < THREADNUM; i++){
@@ -139,6 +140,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
             inFile.close();
         }
+        System.out.println("realsize: " + pos);
         ans = MyFind.quickFind(data, 0, pos - 1, rankDiff).toString();
         long e1 = System.currentTimeMillis();
         System.out.println("one quantile time is " + (e1 - s1) + " rank "+ rank + " index " + index + " ans "+ ans + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum]);
@@ -261,6 +263,16 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 System.out.println(Arrays.toString(beginOrder[i][j]));
             }
         }
+        int[][][] rbegin = new int[2][2][BOUNDARYSIZE];
+        int[][][] base = new int[2][2][BOUNDARYSIZE];
+
+//        for (int i = 0; i < 2; i ++){
+//            for (int j = 0; j < BOUNDARYSIZE; j++){
+//                for ( int k = 0; k < THREADNUM; k++){
+//
+//                }
+//            }
+//        }
 
     }
 
