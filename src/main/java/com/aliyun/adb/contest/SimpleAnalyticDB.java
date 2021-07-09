@@ -261,6 +261,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 System.out.println(Arrays.toString(beginOrder[i][j]));
             }
         }
+
     }
 
 
@@ -412,13 +413,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             blockSize[k][1][i] += rightChannel[i].getChannel().size() >> 3;
                         }
                     }
-                    for(int i = 0; i < BOUNDARYSIZE; i++)
-                    {
-                        leftChannel[i].close();
-                        rightChannel[i].close();
-                    }
                 }
-                Thread.sleep(2000);
             }catch (Exception e){
                 e.printStackTrace();
             }
