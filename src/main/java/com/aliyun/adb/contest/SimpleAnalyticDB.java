@@ -305,8 +305,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         outLDir = workDir + "/" + curTableName + "-" + colName[k][0] + threadNo + "-"  +  i;
                         outRDir = workDir + "/" + curTableName + "-" + colName[k][1] + threadNo + "-" + i;
                         LoutFile = new File(outLDir);
-                        System.out.println("new Dir " + outLDir);
-                        System.out.println("new Dir " + outRDir);
+//                        System.out.println("new Dir " + outLDir);
+//                        System.out.println("new Dir " + outRDir);
                         RoutFile = new File(outRDir);
                         Lrw = new RandomAccessFile(LoutFile, "rw");
                         Rrw = new RandomAccessFile(RoutFile, "rw");
