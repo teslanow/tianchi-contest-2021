@@ -93,6 +93,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     public String quantile(String table, String column, double percentile) throws Exception {
         long s1 = System.currentTimeMillis();
         String ans;
+        System.out.println("percential" + percentile);
         int rank = (int) Math.round(DATALENGTH * percentile);
         int index;
         int flag_table, flag_colum;
