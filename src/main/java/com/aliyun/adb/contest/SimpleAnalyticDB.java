@@ -418,6 +418,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         rightChannel[i].close();
                     }
                 }
+                Thread.sleep(2000);
             }catch (Exception e){
                 e.printStackTrace();
             }
