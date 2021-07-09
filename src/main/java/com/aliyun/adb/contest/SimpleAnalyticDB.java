@@ -302,16 +302,16 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     StringBuilder builder;
                     curTableName = tabName[k];
                     for (int i = 0; i < BOUNDARYSIZE; i++) {
-                        builder = new StringBuilder(workDir);
-                        outLDir = builder.append("/").append(curTableName).append("-").append(colName[k][0]).append(threadNo).append("-").append(i).toString();
-                        builder = new StringBuilder(workDir);
-                        outRDir = builder.append("/").append(curTableName).append("-").append(colName[k][1]).append(threadNo).append("-").append(i).toString();
+                        outLDir = workDir + "/" + curTableName + "-" + colName[k][0] + threadNo + "-"  +  i;
+                        outRDir = workDir + "/" + curTableName + "-" + colName[k][1] + threadNo + "-" + i;
                         LoutFile = new File(outLDir);
+                        System.out.println("new Dir " + outLDir);
+                        System.out.println("new Dir " + outRDir);
                         RoutFile = new File(outRDir);
                         Lrw = new RandomAccessFile(LoutFile, "rw");
                         Rrw = new RandomAccessFile(RoutFile, "rw");
-                        Lrw.setLength(8*600000); //length need change
-                        Rrw.setLength(8*600000);
+                        Lrw.setLength(8*60000); //length need change
+                        Rrw.setLength(8*60000);
                         leftChannel[i] = new FileOutputStream(LoutFile);
                         rightChannel[i] = new FileOutputStream(RoutFile);
                         leftBufs[i] = ByteBuffer.allocate(BYTEBUFFERSIZE);
