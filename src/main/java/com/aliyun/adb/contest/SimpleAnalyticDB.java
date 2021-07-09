@@ -15,8 +15,8 @@ import java.util.concurrent.CountDownLatch;
 
 public class SimpleAnalyticDB implements AnalyticDB {
 
-    private static final int BOUNDARYSIZE = 260;
-    private static final int THREADNUM = 24;
+    private static final int BOUNDARYSIZE = 130;
+    private static final int THREADNUM = 16;
     private static final int DATALENGTH = 1000000000;
     private static final int BYTEBUFFERSIZE = 1024 * 64;
     private static final int EACHREADSIZE = 1024 * 1024 * 16;
@@ -31,7 +31,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
     private static final CountDownLatch latch = new CountDownLatch(THREADNUM);
     private  String workDir;
-    
+
     public SimpleAnalyticDB() throws NoSuchFieldException, IllegalAccessException {
         this.unsafe = GetUnsafe.getUnsafe();
     }
@@ -90,7 +90,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     }
 
     @Override
-    public String quantile(String table, String column, double percentile) throws Exception {
+    public synchronized String quantile(String table, String column, double percentile) throws Exception {
         long s1 = System.currentTimeMillis();
         String ans;
         System.out.println("percential" + percentile);
@@ -135,7 +135,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
             long size = channel.size();
             MappedByteBuffer mappedByteBuffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, size);
             mappedByteBuffer.order(ByteOrder.LITTLE_ENDIAN);
-            mappedByteBuffer.position(0);
             for(int j = 0; j < size; j +=8 ) {
                 data[pos++] = mappedByteBuffer.getLong(j);
             }
@@ -324,8 +323,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         RoutFile = new File(outRDir);
                         Lrw = new RandomAccessFile(LoutFile, "rw");
                         Rrw = new RandomAccessFile(RoutFile, "rw");
-                        Lrw.setLength(8*30000); //length need change
-                        Rrw.setLength(8*30000);
+                        Lrw.setLength(8*60000); //length need change
+                        Rrw.setLength(8*60000);
                         leftChannel[i] = new FileOutputStream(LoutFile);
                         rightChannel[i] = new FileOutputStream(RoutFile);
                         leftBufs[i] = ByteBuffer.allocate(BYTEBUFFERSIZE);
@@ -355,7 +354,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             if((t & 16) == 0) {
                                 if(t == 44) {
                                     //leftReadNum++;
-                                    int leftIndex = (int)(val >> 55);
+                                    int leftIndex = (int)(val >> 56);
                                     leftBufs[leftIndex].putLong(val);
                                     position = leftBufs[leftIndex].position();
                                     if (position >= BYTEBUFFERSIZE) {
@@ -365,7 +364,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     val = 0;
                                 }else {
                                     //rightReadNum++;
-                                    int rightIndex = (int)(val >> 55);
+                                    int rightIndex = (int)(val >> 56);
                                     rightBufs[rightIndex].putLong(val);
                                     position = rightBufs[rightIndex].position();
                                     if (position >= BYTEBUFFERSIZE) {
@@ -392,7 +391,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         if((t & 16) == 0) {
                             if(t == 44) {
                                 //leftReadNum++;
-                                int leftIndex = (int)(val >> 55);
+                                int leftIndex = (int)(val >> 56);
                                 leftBufs[leftIndex].putLong(val);
                                 position = leftBufs[leftIndex].position();
                                 if (position >= BYTEBUFFERSIZE) {
@@ -402,7 +401,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 val = 0;
                             }else {
                                 //rightReadNum++;
-                                int rightIndex = (int)(val >> 55);
+                                int rightIndex = (int)(val >> 56);
                                 rightBufs[rightIndex].putLong(val);
                                 position = rightBufs[rightIndex].position();
                                 if (position >= BYTEBUFFERSIZE) {
@@ -416,13 +415,13 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             val = val * 10 + (t - 48);
                         }
                     }
-
-                    for(int i = 0; i < BOUNDARYSIZE; i++) {
-
-                        leftChannel[i].write(leftBufs[i].array(),0 ,leftBufs[i].position());
+                    for (int i = 0; i < BOUNDARYSIZE; i++){
                         leftChannel[i].flush();
-                        rightChannel[i].write(rightBufs[i].array(),0 ,rightBufs[i].position());
                         rightChannel[i].flush();
+                    }
+                    for(int i = 0; i < BOUNDARYSIZE; i++) {
+                        leftChannel[i].write(leftBufs[i].array(),0 ,leftBufs[i].position());
+                        rightChannel[i].write(rightBufs[i].array(),0 ,rightBufs[i].position());
                         synchronized (blockSize[k])
                         {
                             blockSize[k][0][i] += leftChannel[i].getChannel().size() >> 3;
