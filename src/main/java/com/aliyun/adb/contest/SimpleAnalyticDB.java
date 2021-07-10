@@ -142,7 +142,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
         ans = MyFind.quickFind(data, 0, pos - 1, rankDiff).toString();
         long e1 = System.currentTimeMillis();
         System.out.println("one quantile time is " + (e1 - s1) + " rank "+ rank + " index " + index + " ans "+ ans + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum]);
-        return ans;
+        //return ans;
+        return "0";
     }
 
     private void loadStore(File[] dataFileList) throws Exception {
@@ -298,14 +299,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     String outLDir, outRDir;
                     File LoutFile, RoutFile;
                     RandomAccessFile Lrw, Rrw;
-                    StringBuilder builder;
                     curTableName = tabName[k];
                     for (int i = 0; i < BOUNDARYSIZE; i++) {
                         outLDir = workDir + "/" + curTableName + "-" + colName[k][0] + threadNo + "-"  +  i;
                         outRDir = workDir + "/" + curTableName + "-" + colName[k][1] + threadNo + "-" + i;
                         LoutFile = new File(outLDir);
-//                        System.out.println("new Dir " + outLDir);
-//                        System.out.println("new Dir " + outRDir);
                         RoutFile = new File(outRDir);
                         Lrw = new RandomAccessFile(LoutFile, "rw");
                         Rrw = new RandomAccessFile(RoutFile, "rw");
