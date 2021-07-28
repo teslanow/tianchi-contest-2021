@@ -15,6 +15,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SimpleAnalyticDB implements AnalyticDB {
 
+    private static final int DIGITNUM = 16;
+    private static final int MAXDIGITNUM = 19;
     //提交需改
     private static final int BOUNDARYSIZE = 1040;
     private static final int QUANTILE_DATA_SIZE = 16000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
@@ -346,6 +348,10 @@ public class SimpleAnalyticDB implements AnalyticDB {
         ByteBuffer directBuffer;
         ByteBuffer[] leftBufs;
         ByteBuffer[] rightBufs;
+        long[] leftBufsBase;
+        long[] rightBufsBase;
+        int[] leftPosition = new int[BOUNDARYSIZE];
+        int[] rightPosition = new int[BOUNDARYSIZE];
         //初始化
         public ThreadTask(int threadNo, long[] readStart ,long[] trueSizeOfMmap, FileChannel[] fileChannel) throws Exception {
             this.threadNo = threadNo;
@@ -358,14 +364,18 @@ public class SimpleAnalyticDB implements AnalyticDB {
         public void run() {
             this.leftBufs = new ByteBuffer[BOUNDARYSIZE];
             this.rightBufs = new ByteBuffer[BOUNDARYSIZE];
+            this.leftBufsBase = new long[BOUNDARYSIZE];
+            this.rightBufsBase = new long[BOUNDARYSIZE];
             this.directBuffer = ByteBuffer.allocateDirect(EACHREADSIZE);
             this.directBufferBase = ((DirectBuffer)directBuffer).address();
             long writeTime = 0;
             for (int i = 0; i < BOUNDARYSIZE; i++) {
                 leftBufs[i] = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
                 leftBufs[i].order(ByteOrder.LITTLE_ENDIAN);
+                leftBufsBase[i] = ((DirectBuffer)leftBufs[i]).address();
                 rightBufs[i] = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
                 rightBufs[i].order(ByteOrder.LITTLE_ENDIAN);
+                rightBufsBase[i] = ((DirectBuffer)rightBufs[i]).address();
             }
             try{
                 for(int k = 0; k < TABLENUM; k++)
@@ -386,53 +396,93 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         }
                         nowRead += realRead;
                         long val = 0;
-                        long position;
+                        int position;
                         byte t;
                         long curPos = directBufferBase;
                         long endPos = directBufferBase + realRead;
+                        long numPrePos = curPos, numlastPos = curPos;
                         for(; curPos < endPos; curPos++) {
                             t = unsafe.getByte(curPos);
                             if((t & 16) == 0) {
                                 if(t == 44) {
-                                    int leftIndex = (int)(val >> SHIFTBITNUM);
+//                                    int leftIndex = (int)(val >> SHIFTBITNUM);
+//                                    ByteBuffer byteBuffer = leftBufs[leftIndex];
+//                                    byteBuffer.putLong(val);
+//                                    position = byteBuffer.position();
+                                    int leftIndex = 0;
+                                    long cur_digit_num = MAXDIGITNUM - (numlastPos - numPrePos);
+                                    if(cur_digit_num == 3)
+                                    {
+                                        leftIndex = (unsafe.getInt(numPrePos) >> 8) - 5328;
+                                    }
+                                    else if(cur_digit_num == 2)
+                                    {
+                                        leftIndex = unsafe.getChar(numlastPos)  - 528;
+                                    }
+                                    else if(cur_digit_num == 1)
+                                    {
+                                        leftIndex = unsafe.getByte(numlastPos) - 48;
+                                    }
                                     ByteBuffer byteBuffer = leftBufs[leftIndex];
-                                    byteBuffer.putLong(val);
-                                    position = byteBuffer.position();
+                                    position = leftPosition[leftIndex];
+                                    unsafe.copyMemory(null, numPrePos + cur_digit_num, null, leftBufsBase[leftIndex] + position + (DIGITNUM - cur_digit_num), cur_digit_num);
+                                    position += DIGITNUM;
                                     if (position >= BYTEBUFFERSIZE) {
                                         FileChannel fileChannel = leftChannel[k][leftIndex];
                                         AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
+                                        byteBuffer.position(position);
                                         byteBuffer.flip();
-//                                        long s1 = System.currentTimeMillis();
-//                                        while (atomicBoolean.compareAndSet(false, true)){}
-//                                        fileChannel.write(byteBuffer);
-//                                        long s2 = System.currentTimeMillis();
-//                                        writeTime += (s2 - s1);
-//                                        atomicBoolean.set(false);
+                                        long s1 = System.currentTimeMillis();
+                                        while (atomicBoolean.compareAndSet(false, true)){}
+                                        fileChannel.write(byteBuffer);
+                                        long s2 = System.currentTimeMillis();
+                                        writeTime += (s2 - s1);
+                                        atomicBoolean.set(false);
+                                        unsafe.setMemory(leftBufsBase[leftIndex], BYTEBUFFERSIZE, (byte)0);
                                         byteBuffer.clear();
+                                        position = 0;
                                     }
+                                    leftPosition[leftIndex] = position;
                                     val = 0;
                                 }else {
-                                    int rightIndex = (int)(val >> SHIFTBITNUM);
+                                    int rightIndex = 0;
+                                    long cur_digit_num = MAXDIGITNUM - (numlastPos - numPrePos);
+                                    if(cur_digit_num == 3)
+                                    {
+                                        rightIndex = (unsafe.getInt(numPrePos) >> 8) - 5328;
+                                    }
+                                    else if(cur_digit_num == 2)
+                                    {
+                                        rightIndex = unsafe.getChar(numlastPos)  - 528;
+                                    }
+                                    else if(cur_digit_num == 1)
+                                    {
+                                        rightIndex = unsafe.getByte(numlastPos) - 48;
+                                    }
                                     ByteBuffer byteBuffer = rightBufs[rightIndex];
-                                    byteBuffer.putLong(val);
-                                    position = byteBuffer.position();
+                                    position = rightPosition[rightIndex];
+                                    unsafe.copyMemory(null, numPrePos + cur_digit_num, null, rightBufsBase[rightIndex] + position + (DIGITNUM - cur_digit_num), cur_digit_num);
+                                    position += DIGITNUM;
                                     if (position >= BYTEBUFFERSIZE) {
                                         FileChannel fileChannel = rightChannel[k][rightIndex];
                                         AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
+                                        byteBuffer.position(position);
                                         byteBuffer.flip();
-//                                        long s1 = System.currentTimeMillis();
-//                                        while (atomicBoolean.compareAndSet(false, true)){}
-//                                        fileChannel.write(byteBuffer);
-//                                        long s2 = System.currentTimeMillis();
-//                                        writeTime += (s2 - s1);
-//                                        atomicBoolean.set(false);
+                                        long s1 = System.currentTimeMillis();
+                                        while (atomicBoolean.compareAndSet(false, true)){}
+                                        fileChannel.write(byteBuffer);
+                                        long s2 = System.currentTimeMillis();
+                                        writeTime += (s2 - s1);
+                                        atomicBoolean.set(false);
+                                        unsafe.setMemory(rightBufsBase[rightIndex], BYTEBUFFERSIZE, (byte)0);
                                         byteBuffer.clear();
+                                        position = 0;
                                     }
+                                    rightPosition[rightIndex] = position;
                                     val = 0;
                                 }
                             }
                             else {
-                                val = (val << 3) + (val << 1) + (t - 48);
                             }
                         }
                     }
@@ -440,39 +490,41 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     directBuffer.clear();
                     fileChannel[k].read(directBuffer, curReadStart + nowRead);
                     long val = 0;
-                    long position = 0;
+                    int position = 0;
                     byte t;
                     long curPos = directBufferBase;
                     long endPos = directBufferBase + realRead;
+                    long numPrePos = curPos, numlastPos = curPos;
                     for(; curPos < endPos; curPos++) {
                         t = unsafe.getByte(curPos);
                         if((t & 16) == 0) {
                             if(t == 44) {
-                                int leftIndex = (int)(val >> SHIFTBITNUM);
+//                                    int leftIndex = (int)(val >> SHIFTBITNUM);
+//                                    ByteBuffer byteBuffer = leftBufs[leftIndex];
+//                                    byteBuffer.putLong(val);
+//                                    position = byteBuffer.position();
+                                int leftIndex = 0;
+                                long cur_digit_num = MAXDIGITNUM - (numlastPos - numPrePos);
+                                if(cur_digit_num == 3)
+                                {
+                                    leftIndex = (unsafe.getInt(numPrePos) >> 8) - 5328;
+                                }
+                                else if(cur_digit_num == 2)
+                                {
+                                    leftIndex = unsafe.getChar(numlastPos)  - 528;
+                                }
+                                else if(cur_digit_num == 1)
+                                {
+                                    leftIndex = unsafe.getByte(numlastPos) - 48;
+                                }
                                 ByteBuffer byteBuffer = leftBufs[leftIndex];
-                                byteBuffer.putLong(val);
-                                position = byteBuffer.position();
+                                position = leftPosition[leftIndex];
+                                unsafe.copyMemory(null, numPrePos + cur_digit_num, null, leftBufsBase[leftIndex] + position + (DIGITNUM - cur_digit_num), cur_digit_num);
+                                position += DIGITNUM;
                                 if (position >= BYTEBUFFERSIZE) {
                                     FileChannel fileChannel = leftChannel[k][leftIndex];
                                     AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
-                                    byteBuffer.flip();
-                                    long s1 = System.currentTimeMillis();
-                                    while (atomicBoolean.compareAndSet(false, true)){}
-                                    fileChannel.write(byteBuffer);
-                                    long s2 = System.currentTimeMillis();
-                                    writeTime += s2 - s1;
-                                    atomicBoolean.set(false);
-                                    byteBuffer.clear();
-                                }
-                                val = 0;
-                            }else {
-                                int rightIndex = (int)(val >> SHIFTBITNUM);
-                                ByteBuffer byteBuffer = rightBufs[rightIndex];
-                                byteBuffer.putLong(val);
-                                position = byteBuffer.position();
-                                if (position >= BYTEBUFFERSIZE) {
-                                    FileChannel fileChannel = rightChannel[k][rightIndex];
-                                    AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
+                                    byteBuffer.position(position);
                                     byteBuffer.flip();
                                     long s1 = System.currentTimeMillis();
                                     while (atomicBoolean.compareAndSet(false, true)){}
@@ -480,19 +532,58 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     long s2 = System.currentTimeMillis();
                                     writeTime += (s2 - s1);
                                     atomicBoolean.set(false);
+                                    unsafe.setMemory(leftBufsBase[leftIndex], BYTEBUFFERSIZE, (byte)0);
                                     byteBuffer.clear();
+                                    position = 0;
                                 }
+                                leftPosition[leftIndex] = position;
+                                val = 0;
+                            }else {
+                                int rightIndex = 0;
+                                long cur_digit_num = MAXDIGITNUM - (numlastPos - numPrePos);
+                                if(cur_digit_num == 3)
+                                {
+                                    rightIndex = (unsafe.getInt(numPrePos) >> 8) - 5328;
+                                }
+                                else if(cur_digit_num == 2)
+                                {
+                                    rightIndex = unsafe.getChar(numlastPos)  - 528;
+                                }
+                                else if(cur_digit_num == 1)
+                                {
+                                    rightIndex = unsafe.getByte(numlastPos) - 48;
+                                }
+                                ByteBuffer byteBuffer = rightBufs[rightIndex];
+                                position = rightPosition[rightIndex];
+                                unsafe.copyMemory(null, numPrePos + cur_digit_num, null, rightBufsBase[rightIndex] + position + (DIGITNUM - cur_digit_num), cur_digit_num);
+                                position += DIGITNUM;
+                                if (position >= BYTEBUFFERSIZE) {
+                                    FileChannel fileChannel = rightChannel[k][rightIndex];
+                                    AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
+                                    byteBuffer.position(position);
+                                    byteBuffer.flip();
+                                    long s1 = System.currentTimeMillis();
+                                    while (atomicBoolean.compareAndSet(false, true)){}
+                                    fileChannel.write(byteBuffer);
+                                    long s2 = System.currentTimeMillis();
+                                    writeTime += (s2 - s1);
+                                    atomicBoolean.set(false);
+                                    unsafe.setMemory(rightBufsBase[rightIndex], BYTEBUFFERSIZE, (byte)0);
+                                    byteBuffer.clear();
+                                    position = 0;
+                                }
+                                rightPosition[rightIndex] = position;
                                 val = 0;
                             }
                         }
                         else {
-                            val = (val << 3) + (val << 1) + (t - 48);
                         }
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++) {
                         FileChannel fileChannel = leftChannel[k][i];
                         AtomicBoolean atomicBoolean = leftChannelSpinLock[k][i];
                         ByteBuffer byteBuffer = leftBufs[i];
+                        byteBuffer.position(leftPosition[i]);
                         byteBuffer.flip();
                         long s1 = System.currentTimeMillis();
                         while (atomicBoolean.compareAndSet(false, true)){}
@@ -507,6 +598,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         FileChannel fileChannel = rightChannel[k][i];
                         AtomicBoolean atomicBoolean = rightChannelSpinLock[k][i];
                         ByteBuffer byteBuffer = rightBufs[i];
+                        byteBuffer.position(rightPosition[i]);
                         byteBuffer.flip();
                         long s1 = System.currentTimeMillis();
                         while (atomicBoolean.compareAndSet(false, true)){}
