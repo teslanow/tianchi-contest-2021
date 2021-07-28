@@ -17,6 +17,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
     private static final int DIGITNUM = 16;
     private static final int MAXDIGITNUM = 19;
+    private static final int INDEXDIGITNUM = 3;
     //提交需改
     private static final int BOUNDARYSIZE = 1040;
     private static final int QUANTILE_DATA_SIZE = 16000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
@@ -309,8 +310,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
         {
             int  lBry = 0, rBry = 0;
             for (int i = 0; i < BOUNDARYSIZE; i++){
-                blockSize[j][0][i] = (int)leftChannel[j][i].position() >> 3;
-                blockSize[j][1][i] = (int)rightChannel[j][i].position() >> 3;
+                blockSize[j][0][i] = (int)leftChannel[j][i].position() / DIGITNUM;
+                blockSize[j][1][i] = (int)rightChannel[j][i].position() / DIGITNUM;
                 beginOrder[j][0][i] = lBry + 1;
                 lBry += blockSize[j][0][i];
                 beginOrder[j][1][i] = rBry + 1;
@@ -400,40 +401,37 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         byte t;
                         long curPos = directBufferBase;
                         long endPos = directBufferBase + realRead;
-                        long numPrePos = curPos, numlastPos = curPos;
+                        long numPrePos = curPos;
                         for(; curPos < endPos; curPos++) {
                             t = unsafe.getByte(curPos);
                             if((t & 16) == 0) {
                                 if(t == 44) {
-//                                    int leftIndex = (int)(val >> SHIFTBITNUM);
-//                                    ByteBuffer byteBuffer = leftBufs[leftIndex];
-//                                    byteBuffer.putLong(val);
-//                                    position = byteBuffer.position();
                                     int leftIndex = 0;
-                                    long cur_digit_num = MAXDIGITNUM - (numlastPos - numPrePos);
-                                    if(cur_digit_num == 3)
+                                    long cur_digit_num = curPos - numPrePos;
+                                    long index_digit_num = cur_digit_num - DIGITNUM;//用来作为索引的位数
+
+                                    for(int l = 0; l < index_digit_num; l++)
                                     {
-                                        leftIndex = (unsafe.getInt(numPrePos) >> 8) - 5328;
+                                        leftIndex = (leftIndex << 3) + (leftIndex << 1) + (unsafe.getByte(numPrePos + l) - 48);
                                     }
-                                    else if(cur_digit_num == 2)
-                                    {
-                                        leftIndex = unsafe.getChar(numlastPos)  - 528;
-                                    }
-                                    else if(cur_digit_num == 1)
-                                    {
-                                        leftIndex = unsafe.getByte(numlastPos) - 48;
-                                    }
-                                    ByteBuffer byteBuffer = leftBufs[leftIndex];
                                     position = leftPosition[leftIndex];
-                                    unsafe.copyMemory(null, numPrePos + cur_digit_num, null, leftBufsBase[leftIndex] + position + (DIGITNUM - cur_digit_num), cur_digit_num);
-                                    position += DIGITNUM;
+                                    if(index_digit_num > 0)
+                                    {
+                                        unsafe.copyMemory(null, numPrePos + index_digit_num, null, leftBufsBase[leftIndex] + position, DIGITNUM );
+                                    }
+                                    else
+                                    {
+                                        unsafe.copyMemory(null, numPrePos, null, leftBufsBase[leftIndex] + position - index_digit_num, cur_digit_num);
+                                    }
+                                    position = position + DIGITNUM;
                                     if (position >= BYTEBUFFERSIZE) {
+                                        ByteBuffer byteBuffer = leftBufs[leftIndex];
                                         FileChannel fileChannel = leftChannel[k][leftIndex];
                                         AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
                                         byteBuffer.position(position);
                                         byteBuffer.flip();
                                         long s1 = System.currentTimeMillis();
-                                        while (atomicBoolean.compareAndSet(false, true)){}
+                                        while (!atomicBoolean.compareAndSet(false, true)){}
                                         fileChannel.write(byteBuffer);
                                         long s2 = System.currentTimeMillis();
                                         writeTime += (s2 - s1);
@@ -443,33 +441,35 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                         position = 0;
                                     }
                                     leftPosition[leftIndex] = position;
+                                    numPrePos = curPos + 1;
                                     val = 0;
                                 }else {
                                     int rightIndex = 0;
-                                    long cur_digit_num = MAXDIGITNUM - (numlastPos - numPrePos);
-                                    if(cur_digit_num == 3)
+                                    long cur_digit_num = curPos - numPrePos;
+                                    long index_digit_num = cur_digit_num - DIGITNUM;//用来作为索引的位数
+                                    for(int l = 0; l < index_digit_num; l++)
                                     {
-                                        rightIndex = (unsafe.getInt(numPrePos) >> 8) - 5328;
+                                        rightIndex = (rightIndex << 3) + (rightIndex << 1) + (unsafe.getByte(numPrePos + l) - 48);
                                     }
-                                    else if(cur_digit_num == 2)
-                                    {
-                                        rightIndex = unsafe.getChar(numlastPos)  - 528;
-                                    }
-                                    else if(cur_digit_num == 1)
-                                    {
-                                        rightIndex = unsafe.getByte(numlastPos) - 48;
-                                    }
-                                    ByteBuffer byteBuffer = rightBufs[rightIndex];
                                     position = rightPosition[rightIndex];
-                                    unsafe.copyMemory(null, numPrePos + cur_digit_num, null, rightBufsBase[rightIndex] + position + (DIGITNUM - cur_digit_num), cur_digit_num);
-                                    position += DIGITNUM;
+                                    if(index_digit_num > 0)
+                                    {
+                                        unsafe.copyMemory(null, numPrePos + index_digit_num, null, rightBufsBase[rightIndex] + position, DIGITNUM );
+                                    }
+                                    else
+                                    {
+                                        unsafe.copyMemory(null, numPrePos, null, rightBufsBase[rightIndex] + position - index_digit_num, cur_digit_num);
+                                    }
+
+                                    position = position + DIGITNUM;
                                     if (position >= BYTEBUFFERSIZE) {
+                                        ByteBuffer byteBuffer = rightBufs[rightIndex];
                                         FileChannel fileChannel = rightChannel[k][rightIndex];
                                         AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
                                         byteBuffer.position(position);
                                         byteBuffer.flip();
                                         long s1 = System.currentTimeMillis();
-                                        while (atomicBoolean.compareAndSet(false, true)){}
+                                        while (!atomicBoolean.compareAndSet(false, true)){}
                                         fileChannel.write(byteBuffer);
                                         long s2 = System.currentTimeMillis();
                                         writeTime += (s2 - s1);
@@ -479,6 +479,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                         position = 0;
                                     }
                                     rightPosition[rightIndex] = position;
+                                    numPrePos = curPos + 1;
                                     val = 0;
                                 }
                             }
@@ -499,35 +500,32 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         t = unsafe.getByte(curPos);
                         if((t & 16) == 0) {
                             if(t == 44) {
-//                                    int leftIndex = (int)(val >> SHIFTBITNUM);
-//                                    ByteBuffer byteBuffer = leftBufs[leftIndex];
-//                                    byteBuffer.putLong(val);
-//                                    position = byteBuffer.position();
                                 int leftIndex = 0;
-                                long cur_digit_num = MAXDIGITNUM - (numlastPos - numPrePos);
-                                if(cur_digit_num == 3)
+                                long cur_digit_num = curPos - numPrePos;
+                                long index_digit_num = cur_digit_num - DIGITNUM;//用来作为索引的位数
+
+                                for(int l = 0; l < index_digit_num; l++)
                                 {
-                                    leftIndex = (unsafe.getInt(numPrePos) >> 8) - 5328;
+                                    leftIndex = (leftIndex << 3) + (leftIndex << 1) + (unsafe.getByte(numPrePos + l) - 48);
                                 }
-                                else if(cur_digit_num == 2)
-                                {
-                                    leftIndex = unsafe.getChar(numlastPos)  - 528;
-                                }
-                                else if(cur_digit_num == 1)
-                                {
-                                    leftIndex = unsafe.getByte(numlastPos) - 48;
-                                }
-                                ByteBuffer byteBuffer = leftBufs[leftIndex];
                                 position = leftPosition[leftIndex];
-                                unsafe.copyMemory(null, numPrePos + cur_digit_num, null, leftBufsBase[leftIndex] + position + (DIGITNUM - cur_digit_num), cur_digit_num);
-                                position += DIGITNUM;
+                                if(index_digit_num > 0)
+                                {
+                                    unsafe.copyMemory(null, numPrePos + index_digit_num, null, leftBufsBase[leftIndex] + position, DIGITNUM );
+                                }
+                                else
+                                {
+                                    unsafe.copyMemory(null, numPrePos, null, leftBufsBase[leftIndex] + position - index_digit_num, cur_digit_num);
+                                }
+                                position = position + DIGITNUM;
                                 if (position >= BYTEBUFFERSIZE) {
+                                    ByteBuffer byteBuffer = leftBufs[leftIndex];
                                     FileChannel fileChannel = leftChannel[k][leftIndex];
                                     AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
                                     byteBuffer.position(position);
                                     byteBuffer.flip();
                                     long s1 = System.currentTimeMillis();
-                                    while (atomicBoolean.compareAndSet(false, true)){}
+                                    while (!atomicBoolean.compareAndSet(false, true)){}
                                     fileChannel.write(byteBuffer);
                                     long s2 = System.currentTimeMillis();
                                     writeTime += (s2 - s1);
@@ -537,33 +535,35 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     position = 0;
                                 }
                                 leftPosition[leftIndex] = position;
+                                numPrePos = curPos + 1;
                                 val = 0;
                             }else {
                                 int rightIndex = 0;
-                                long cur_digit_num = MAXDIGITNUM - (numlastPos - numPrePos);
-                                if(cur_digit_num == 3)
+                                long cur_digit_num = curPos - numPrePos;
+                                long index_digit_num = cur_digit_num - DIGITNUM;//用来作为索引的位数
+                                for(int l = 0; l < index_digit_num; l++)
                                 {
-                                    rightIndex = (unsafe.getInt(numPrePos) >> 8) - 5328;
+                                    rightIndex = (rightIndex << 3) + (rightIndex << 1) + (unsafe.getByte(numPrePos + l) - 48);
                                 }
-                                else if(cur_digit_num == 2)
-                                {
-                                    rightIndex = unsafe.getChar(numlastPos)  - 528;
-                                }
-                                else if(cur_digit_num == 1)
-                                {
-                                    rightIndex = unsafe.getByte(numlastPos) - 48;
-                                }
-                                ByteBuffer byteBuffer = rightBufs[rightIndex];
                                 position = rightPosition[rightIndex];
-                                unsafe.copyMemory(null, numPrePos + cur_digit_num, null, rightBufsBase[rightIndex] + position + (DIGITNUM - cur_digit_num), cur_digit_num);
-                                position += DIGITNUM;
+                                if(index_digit_num > 0)
+                                {
+                                    unsafe.copyMemory(null, numPrePos + index_digit_num, null, rightBufsBase[rightIndex] + position, DIGITNUM );
+                                }
+                                else
+                                {
+                                    unsafe.copyMemory(null, numPrePos, null, rightBufsBase[rightIndex] + position - index_digit_num, cur_digit_num);
+                                }
+
+                                position = position + DIGITNUM;
                                 if (position >= BYTEBUFFERSIZE) {
+                                    ByteBuffer byteBuffer = rightBufs[rightIndex];
                                     FileChannel fileChannel = rightChannel[k][rightIndex];
                                     AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
                                     byteBuffer.position(position);
                                     byteBuffer.flip();
                                     long s1 = System.currentTimeMillis();
-                                    while (atomicBoolean.compareAndSet(false, true)){}
+                                    while (!atomicBoolean.compareAndSet(false, true)){}
                                     fileChannel.write(byteBuffer);
                                     long s2 = System.currentTimeMillis();
                                     writeTime += (s2 - s1);
@@ -573,6 +573,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     position = 0;
                                 }
                                 rightPosition[rightIndex] = position;
+                                numPrePos = curPos + 1;
                                 val = 0;
                             }
                         }
@@ -586,12 +587,13 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         byteBuffer.position(leftPosition[i]);
                         byteBuffer.flip();
                         long s1 = System.currentTimeMillis();
-                        while (atomicBoolean.compareAndSet(false, true)){}
+                        while (!atomicBoolean.compareAndSet(false, true)){}
                         fileChannel.write(byteBuffer);
                         long s2 = System.currentTimeMillis();
                         writeTime += (s2 - s1);
                         atomicBoolean.set(false);
                         byteBuffer.clear();
+                        leftPosition[i] = 0;
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++)
                     {
@@ -601,12 +603,13 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         byteBuffer.position(rightPosition[i]);
                         byteBuffer.flip();
                         long s1 = System.currentTimeMillis();
-                        while (atomicBoolean.compareAndSet(false, true)){}
+                        while (!atomicBoolean.compareAndSet(false, true)){}
                         fileChannel.write(byteBuffer);
                         long s2 = System.currentTimeMillis();
                         writeTime += (s2 - s1);
                         atomicBoolean.set(false);
                         byteBuffer.clear();
+                        rightPosition[i] = 0;
                     }
                 }
             }catch (Exception e){
