@@ -435,7 +435,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 }
                             }
                             else {
-                                val = (val << 3) + (val << 1) + (t - 48);
+                                val = val * 10 + (t - 48);
                             }
                         }
                     }
@@ -487,7 +487,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             }
                         }
                         else {
-                            val = (val << 3) + (val << 1) + (t - 48);
+                            val = val * 10 + (t - 48);
                         }
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++) {
