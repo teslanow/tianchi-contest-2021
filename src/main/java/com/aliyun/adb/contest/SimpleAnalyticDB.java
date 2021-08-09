@@ -9,11 +9,15 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.concurrent.CountDownLatch;
+import java.util.Date;
+import java.util.Queue;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.SimpleFormatter;
 
 public class SimpleAnalyticDB implements AnalyticDB {
 
@@ -21,14 +25,14 @@ public class SimpleAnalyticDB implements AnalyticDB {
     private static final long DATAIN_EACHBLOCKTHREAD = 400000; //每个线程处理的每个块的数据量（字节单位）
     private static final int BOUNDARYSIZE = 1040;
     private static final int QUANTILE_DATA_SIZE = 16000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
-    private static final int THREADNUM = 1;
-    private static final int WRITETHREAD = 1;
+    private static final int THREADNUM = 20;
+    private static final int WRITETHREAD = 10;
     private static AtomicInteger endFlag = new AtomicInteger();
     private static final int ALLEND = (1 << THREADNUM) - 1;
     private static final long DATALENGTH = 1000000000;
     private static final long FILE_SIZE = 1000000;
-    private static final int BYTEBUFFERSIZE = 64;
-    private static final int EACHREADSIZE = 16;
+    private static final int BYTEBUFFERSIZE = 64 * 1024;
+    private static final int EACHREADSIZE = 16 * 1024 * 1024;
     private static final int TABLENUM = 2;
     private static final int COLNUM_EACHTABLE = 2;
     private static final int SHIFTBITNUM = 53;
@@ -287,19 +291,15 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 rightChannel[j][i] = Rrw.getChannel();
             }
         }
-        ArrayDeque<ByteBuffer> fullQueue = new ArrayDeque<>(200000);
-        ArrayDeque<ByteBuffer> emptyQueue = new ArrayDeque<>(200000);
-        ArrayDeque<Tuple> fullQueueID = new ArrayDeque<>(200000);
-        AtomicBoolean fullQueueSpinLock = new AtomicBoolean(false);
-        AtomicBoolean emptyQueueSpinLock = new AtomicBoolean(false);
+        LinkedBlockingDeque<Tuple> fullQueue = new LinkedBlockingDeque<>(200000);
+        LinkedBlockingDeque<Tuple> emptyQueue = new LinkedBlockingDeque<>(200000);
         for(int i = 0; i < THREADNUM; i++)
         {
-            //new Thread(new ThreadTask(i, readStartEachThread[i], trueSizeOfMmapEachThread[i], allFileChannel)).start();
-            new Thread(new ProducerThread(i, readStartEachThread[i],trueSizeOfMmapEachThread[i], allFileChannel, fullQueue, emptyQueue, fullQueueID, fullQueueSpinLock, emptyQueueSpinLock )).start();
+            new Thread(new ProducerThread(i, readStartEachThread[i],trueSizeOfMmapEachThread[i], allFileChannel, fullQueue, emptyQueue )).start();
         }
         for(int i = 0; i < WRITETHREAD; i++)
         {
-            new Thread(new ConsumerThread(i, fullQueue, emptyQueue, fullQueueID,fullQueueSpinLock, emptyQueueSpinLock)).start();
+            new Thread(new ConsumerThread(i, fullQueue, emptyQueue)).start();
         }
 
         latch.await();
@@ -357,11 +357,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
         ByteBuffer directBuffer;
         ByteBuffer[] leftBufs;
         ByteBuffer[] rightBufs;
-        ArrayDeque<ByteBuffer> fullQueue, emptyQueue;
-        AtomicBoolean fullQueueSpinLock, emptyQueueSpinLock;
-        ArrayDeque<Tuple> fullQueueID; //表明queue里的元素属于哪个表
-        ProducerThread(int threadNo, long[] readStart , long[] trueSizeOfMmap, FileChannel[] fileChannel, ArrayDeque<ByteBuffer> fullQueue,
-                       ArrayDeque<ByteBuffer> emptyQueue, ArrayDeque<Tuple> fullQueueID,AtomicBoolean fullQueueSpinLock, AtomicBoolean emptyQueueSpinLock)
+        LinkedBlockingDeque<Tuple> fullQueue, emptyQueue;
+        ProducerThread(int threadNo, long[] readStart , long[] trueSizeOfMmap, FileChannel[] fileChannel, LinkedBlockingDeque<Tuple> fullQueue,
+                       LinkedBlockingDeque<Tuple> emptyQueue)
         {
             this.threadNo = threadNo;
             this.readStart = readStart;
@@ -369,9 +367,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
             this.fileChannel = fileChannel;
             this.fullQueue = fullQueue;
             this.emptyQueue = emptyQueue;
-            this.fullQueueID = fullQueueID;
-            this.fullQueueSpinLock = fullQueueSpinLock;
-            this.emptyQueueSpinLock = emptyQueueSpinLock;
         }
         @Override
         public void run() {
@@ -416,59 +411,29 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     int leftIndex = (int)(val >> SHIFTBITNUM);
                                     if(leftBufs[leftIndex] == null)
                                     {
-                                        while(true)
-                                        {
-                                            while (!emptyQueueSpinLock.compareAndSet(false, true)){}
-                                            if(!emptyQueue.isEmpty())
-                                            {
-                                                leftBufs[leftIndex] = emptyQueue.removeFirst();
-                                                emptyQueueSpinLock.set(false);
-                                                break;
-                                            }
-                                            else {
-                                                emptyQueueSpinLock.set(false);
-                                            }
-                                        }
+                                        leftBufs[leftIndex] = emptyQueue.take().val4;
                                     }
                                     ByteBuffer byteBuffer = leftBufs[leftIndex];
                                     byteBuffer.putLong(val);
                                     position = byteBuffer.position();
                                     if (position >= BYTEBUFFERSIZE) {
                                         //填入
-                                        while (!fullQueueSpinLock.compareAndSet(false, true)){}
-                                        fullQueue.offer(byteBuffer);
-                                        fullQueueID.offer(new Tuple(k, 0, leftIndex));
+                                        fullQueue.put(new Tuple(k, 0, leftIndex, byteBuffer));
                                         leftBufs[leftIndex] = null;
-                                        fullQueueSpinLock.set(false);
                                     }
                                     val = 0;
                                 }else {
                                     int rightIndex = (int)(val >> SHIFTBITNUM);
                                     if(rightBufs[rightIndex] == null)
                                     {
-                                        while(true)
-                                        {
-                                            while (!emptyQueueSpinLock.compareAndSet(false, true)){}
-                                            if(!emptyQueue.isEmpty())
-                                            {
-                                                rightBufs[rightIndex] = emptyQueue.removeFirst();
-                                                emptyQueueSpinLock.set(false);
-                                                break;
-                                            }
-                                            else {
-                                                emptyQueueSpinLock.set(false);
-                                            }
-                                        }
+                                        rightBufs[rightIndex] = emptyQueue.take().val4;
                                     }
                                     ByteBuffer byteBuffer = rightBufs[rightIndex];
                                     byteBuffer.putLong(val);
                                     position = byteBuffer.position();
                                     if (position >= BYTEBUFFERSIZE) {
-                                        while (!fullQueueSpinLock.compareAndSet(false, true)){}
-                                        fullQueue.offer(byteBuffer);
-                                        fullQueueID.offer(new Tuple(k, 1, rightIndex));
+                                        fullQueue.put(new Tuple(k, 1, rightIndex, byteBuffer));
                                         rightBufs[rightIndex] = null;
-                                        fullQueueSpinLock.set(false);
                                     }
                                     val = 0;
                                 }
@@ -493,59 +458,29 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 int leftIndex = (int)(val >> SHIFTBITNUM);
                                 if(leftBufs[leftIndex] == null)
                                 {
-                                    while(true)
-                                    {
-                                        while (!emptyQueueSpinLock.compareAndSet(false, true)){}
-                                        if(!emptyQueue.isEmpty())
-                                        {
-                                            leftBufs[leftIndex] = emptyQueue.removeFirst();
-                                            emptyQueueSpinLock.set(false);
-                                            break;
-                                        }
-                                        else {
-                                            emptyQueueSpinLock.set(false);
-                                        }
-                                    }
+                                    leftBufs[leftIndex] = emptyQueue.take().val4;
                                 }
                                 ByteBuffer byteBuffer = leftBufs[leftIndex];
                                 byteBuffer.putLong(val);
                                 position = byteBuffer.position();
                                 if (position >= BYTEBUFFERSIZE) {
                                     //填入
-                                    while (!fullQueueSpinLock.compareAndSet(false, true)){}
-                                    fullQueue.offer(byteBuffer);
-                                    fullQueueID.offer(new Tuple(k, 0, leftIndex));
+                                    fullQueue.put(new Tuple(k, 0, leftIndex, byteBuffer));
                                     leftBufs[leftIndex] = null;
-                                    fullQueueSpinLock.set(false);
                                 }
                                 val = 0;
                             }else {
                                 int rightIndex = (int)(val >> SHIFTBITNUM);
                                 if(rightBufs[rightIndex] == null)
                                 {
-                                    while(true)
-                                    {
-                                        while (!emptyQueueSpinLock.compareAndSet(false, true)){}
-                                        if(!emptyQueue.isEmpty())
-                                        {
-                                            rightBufs[rightIndex] = emptyQueue.removeFirst();
-                                            emptyQueueSpinLock.set(false);
-                                            break;
-                                        }
-                                        else {
-                                            emptyQueueSpinLock.set(false);
-                                        }
-                                    }
+                                    rightBufs[rightIndex] = emptyQueue.take().val4;
                                 }
                                 ByteBuffer byteBuffer = rightBufs[rightIndex];
                                 byteBuffer.putLong(val);
                                 position = byteBuffer.position();
                                 if (position >= BYTEBUFFERSIZE) {
-                                    while (!fullQueueSpinLock.compareAndSet(false, true)){}
-                                    fullQueue.offer(byteBuffer);
-                                    fullQueueID.offer(new Tuple(k, 1, rightIndex));
+                                    fullQueue.put(new Tuple(k, 1, rightIndex, byteBuffer));
                                     rightBufs[rightIndex] = null;
-                                    fullQueueSpinLock.set(false);
                                 }
                                 val = 0;
                             }
@@ -554,57 +489,56 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             val = val * 10 + (t - 48);
                         }
                     }
-                    while (!fullQueueSpinLock.compareAndSet(false, true)){}
                     for(int i = 0; i < BOUNDARYSIZE; i++) {
                         ByteBuffer byteBuffer = leftBufs[i];
-                        if(byteBuffer.position() == 0)
+                        if(byteBuffer == null || byteBuffer.position() == 0)
                             continue;
                         else
                         {
-                            fullQueue.offer(byteBuffer);
-                            fullQueueID.offer(new Tuple(k, 0, i));
+                            fullQueue.put(new Tuple(k, 0, i, byteBuffer));
                             leftBufs[i] = null;
                         }
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++)
                     {
                         ByteBuffer byteBuffer = rightBufs[i];
-                        if(byteBuffer.position() == 0)
+                        if(byteBuffer == null || byteBuffer.position() == 0)
                             continue;
                         else
                         {
-                            fullQueue.offer(byteBuffer);
-                            fullQueueID.offer(new Tuple(k, 1, i));
+                            fullQueue.put(new Tuple(k, 1, i, byteBuffer));
                             rightBufs[i] = null;
                         }
 
                     }
-                    fullQueueSpinLock.set(false);
-                    //收回资源
-
+                    System.out.println("Thread " + threadNo + " finish " + new SimpleDateFormat("HH:mm:ss").format(new Date(System.currentTimeMillis())));
                 }
+                endFlag.getAndAdd(1 << threadNo);
+                if(endFlag.get() == ALLEND)
+                {
+                    for(int i = 0; i < WRITETHREAD;i++)
+                    {
+                        fullQueue.put(new Tuple(0, 0, 0, null));
+                    }
+                }
+
             }catch (Exception e){
                 e.printStackTrace();
             }
-            endFlag.getAndAdd(1 << threadNo);
-            System.out.println("Thread " + threadNo + " write time " + writeTime);
+
+
         }
     }
     class ConsumerThread implements Runnable{
-        ArrayDeque<ByteBuffer> fullQueue, emptyQueue;
-        ArrayDeque<Tuple> fullQueueID;
-        AtomicBoolean fullQueueSpinLock, emptyQueueSpinLock;
+        LinkedBlockingDeque<Tuple> fullQueue, emptyQueue;
         long[][] leftStart = new long[TABLENUM][BOUNDARYSIZE];
         long[][] rightStart = new long[TABLENUM][BOUNDARYSIZE];
         int threadNo;
-        ConsumerThread(int threadNo, ArrayDeque<ByteBuffer> fullQueue, ArrayDeque<ByteBuffer> emptyQueue, ArrayDeque<Tuple> fullQueueID,AtomicBoolean fullQueueSpinLock, AtomicBoolean emptyQueueSpinLock)
+        ConsumerThread(int threadNo, LinkedBlockingDeque<Tuple> fullQueue, LinkedBlockingDeque<Tuple> emptyQueue)
         {
             this.threadNo = threadNo;
             this.fullQueue = fullQueue;
             this.emptyQueue = emptyQueue;
-            this.fullQueueID = fullQueueID;
-            this.fullQueueSpinLock = fullQueueSpinLock;
-            this.emptyQueueSpinLock = emptyQueueSpinLock;
         }
         @Override
         public void run() {
@@ -621,32 +555,26 @@ public class SimpleAnalyticDB implements AnalyticDB {
             try {
                 while (true)
                 {
-                    while (!fullQueueSpinLock.compareAndSet(false, true)){}
-                    if(fullQueue.isEmpty())
+                    Tuple id = fullQueue.take();
+                    if(id.val4 == null)
                     {
-                        fullQueueSpinLock.set(false);
-                        if(endFlag.get() == ALLEND)
+                        synchronized (blockSize)
                         {
-                            synchronized (blockSize)
+                            for(int i = 0; i < TABLENUM; i++)
                             {
-                                for(int i = 0; i < TABLENUM; i++)
+                                for(int k = 0; k < BOUNDARYSIZE; k++)
                                 {
-                                    for(int k = 0; k < BOUNDARYSIZE; k++)
-                                    {
-                                        blockSize[i][0][k] += (int)((leftStart[i][k] - base) >> 3);
-                                        blockSize[i][1][k] += (int)((rightStart[i][k] - base) >> 3);
-                                    }
+                                    blockSize[i][0][k] += (int)((leftStart[i][k] - base) >> 3);
+                                    blockSize[i][1][k] += (int)((rightStart[i][k] - base) >> 3);
                                 }
                             }
-                            latch.countDown();
-                            return;
                         }
+                        latch.countDown();
+                        return;
                     }
                     else
                     {
-                        ByteBuffer byteBuffer = fullQueue.removeFirst();
-                        Tuple id = fullQueueID.removeFirst();
-                        fullQueueSpinLock.set(false);
+                        ByteBuffer byteBuffer = id.val4;
                         //val2 means col id
                         FileChannel fileChannel;
                         long start;
@@ -664,12 +592,10 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         byteBuffer.flip();
                         fileChannel.write(byteBuffer, start);
                         byteBuffer.clear();
-                        while (!emptyQueueSpinLock.compareAndSet(false, true)){}
-                        emptyQueue.offer(byteBuffer);
-                        emptyQueueSpinLock.set(false);
+                        emptyQueue.put(id);;
                     }
                 }
-            } catch (IOException e) {
+            } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
             }
         }
