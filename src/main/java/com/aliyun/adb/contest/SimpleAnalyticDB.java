@@ -52,6 +52,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
     //实验
     private final FileChannel[][] leftChannel = new FileChannel[TABLENUM][BOUNDARYSIZE];
     private final FileChannel[][] rightChannel = new FileChannel[TABLENUM][BOUNDARYSIZE];
+    private AtomicBoolean[][] leftChannelSpinLock = new AtomicBoolean[TABLENUM][BOUNDARYSIZE];
+    private AtomicBoolean[][] rightChannelSpinLock = new AtomicBoolean[TABLENUM][BOUNDARYSIZE];
     private  String workDir;
 
     public SimpleAnalyticDB() throws NoSuchFieldException, IllegalAccessException {
@@ -288,7 +290,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 Lrw.setLength(FILE_SIZE);
                 Rrw.setLength(FILE_SIZE);
                 leftChannel[j][i] = Lrw.getChannel();
+                leftChannelSpinLock[j][i] = new AtomicBoolean(false);
                 rightChannel[j][i] = Rrw.getChannel();
+                rightChannelSpinLock[j][i] = new AtomicBoolean(false);
             }
         }
         LinkedBlockingDeque<Tuple> fullQueue = new LinkedBlockingDeque<>(200000);
@@ -605,25 +609,24 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         ByteBuffer byteBuffer = id.val4;
                         //val2 means col id
                         FileChannel fileChannel;
-                        long start;
+                        AtomicBoolean atomicBoolean;
                         if(id.val2 == 0)
                         {
                             fileChannel = leftChannel[id.val1][id.val3];
-                            start = leftStart[id.val1][id.val3];
                             leftStart[id.val1][id.val3] += byteBuffer.position();
+                            atomicBoolean = leftChannelSpinLock[id.val1][id.val3];
                         }
                         else {
                             fileChannel = rightChannel[id.val1][id.val3];
-                            start = rightStart[id.val1][id.val3];
                             rightStart[id.val1][id.val3] += byteBuffer.position();
+                            atomicBoolean = rightChannelSpinLock[id.val1][id.val3];
                         }
                         byteBuffer.flip();
                         long s = System.currentTimeMillis();
                         //fileChannel.write(byteBuffer, start);
-                        synchronized (fileChannel)
-                        {
-                            fileChannel.write(byteBuffer);
-                        }
+                        while (!atomicBoolean.compareAndSet(false, true)){}
+                        fileChannel.write(byteBuffer);
+                        atomicBoolean.set(false);
                         long e = System.currentTimeMillis();
                         writeTime += (e - s);
                         byteBuffer.clear();
