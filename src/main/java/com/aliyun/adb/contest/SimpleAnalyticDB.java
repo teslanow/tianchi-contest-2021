@@ -21,12 +21,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.SimpleFormatter;
 
 public class SimpleAnalyticDB implements AnalyticDB {
-    private static final int BUFPOOLSIZE = 5;
+    private static final int BUFPOOLSIZE = 2;
     //提交需改
     private static final long DATAIN_EACHBLOCKTHREAD = 400000; //每个线程处理的每个块的数据量（字节单位）
     private static final int BOUNDARYSIZE = 1040;
     private static final int QUANTILE_DATA_SIZE = 16000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
-    private static final int THREADNUM = 15;
+    private static final int THREADNUM = 5;
     private static final int WRITETHREAD = 20;
     private static AtomicInteger endFlag = new AtomicInteger();
     private static final int ALLEND = (1 << THREADNUM) - 1;
@@ -296,15 +296,20 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 rightChannelSpinLock[j][i] = new AtomicBoolean(false);
             }
         }
-        LinkedBlockingDeque<Tuple> fullQueue = new LinkedBlockingDeque<>(200000);
-        LinkedBlockingDeque<Tuple> emptyQueue = new LinkedBlockingDeque<>(200000);
+        LinkedBlockingDeque<Tuple>[] fullQueue = new LinkedBlockingDeque[THREADNUM];
+        LinkedBlockingDeque<Tuple>[] emptyQueue = new LinkedBlockingDeque[THREADNUM];
         for(int i = 0; i < THREADNUM; i++)
         {
-            new Thread(new ProducerThread(i, readStartEachThread[i],trueSizeOfMmapEachThread[i], allFileChannel, fullQueue, emptyQueue )).start();
+            fullQueue[i] = new LinkedBlockingDeque<>(20000);
+            emptyQueue[i] = new LinkedBlockingDeque<>(20000);
+        }
+        for(int i = 0; i < THREADNUM; i++)
+        {
+            new Thread(new ProducerThread(i, readStartEachThread[i],trueSizeOfMmapEachThread[i], allFileChannel, fullQueue[i], emptyQueue[i] )).start();
         }
         for(int i = 0; i < WRITETHREAD; i++)
         {
-            new Thread(new ConsumerThread(i, fullQueue, emptyQueue)).start();
+            new Thread(new ConsumerThread(i, fullQueue[i / 4], emptyQueue[i / 4])).start();
         }
 
         latch.await();
@@ -672,9 +677,10 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             atomicBoolean = rightChannelSpinLock[id.val1][id.val3];
                         }
                         byteBuffer.flip();
-                        long s = System.currentTimeMillis();
+
                         //fileChannel.write(byteBuffer, start);
                         while (!atomicBoolean.compareAndSet(false, true)){}
+                        long s = System.currentTimeMillis();
                         fileChannel.write(byteBuffer);
                         atomicBoolean.set(false);
                         long e = System.currentTimeMillis();
