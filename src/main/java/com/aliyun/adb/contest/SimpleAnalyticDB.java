@@ -26,7 +26,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     private static final int BOUNDARYSIZE = 1040;
     private static final int QUANTILE_DATA_SIZE = 16000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
     private static final int THREADNUM = 5;
-    private static final int WRITETHREAD = 10;
+    private static final int WRITETHREAD = 8;
     private static AtomicInteger endFlag = new AtomicInteger();
     private static final int ALLEND = (1 << THREADNUM) - 1;
     private static final long DATALENGTH = 1000000000;
@@ -429,7 +429,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     ByteBuffer byteBuffer = tuple.val4;
                                     byteBuffer.putLong(val);
                                     position = byteBuffer.position();
-                                    if (position >= BYTEBUFFERSIZE) {
+                                    if (position == BYTEBUFFERSIZE) {
                                         //填入
                                         tuple.setAll(k, 0, leftIndex);
                                         fullQueue.put(tuple);
@@ -446,7 +446,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     ByteBuffer byteBuffer = tuple.val4;
                                     byteBuffer.putLong(val);
                                     position = byteBuffer.position();
-                                    if (position >= BYTEBUFFERSIZE) {
+                                    if (position == BYTEBUFFERSIZE) {
                                         tuple.setAll(k, 1, rightIndex);
                                         fullQueue.put(tuple);
                                         rightBufs[rightIndex] = null;
@@ -480,7 +480,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 ByteBuffer byteBuffer = tuple.val4;
                                 byteBuffer.putLong(val);
                                 position = byteBuffer.position();
-                                if (position >= BYTEBUFFERSIZE) {
+                                if (position == BYTEBUFFERSIZE) {
                                     //填入
                                     tuple.setAll(k, 0, leftIndex);
                                     fullQueue.put(tuple);
@@ -497,7 +497,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 ByteBuffer byteBuffer = tuple.val4;
                                 byteBuffer.putLong(val);
                                 position = byteBuffer.position();
-                                if (position >= BYTEBUFFERSIZE) {
+                                if (position == BYTEBUFFERSIZE) {
                                     tuple.setAll(k, 1, rightIndex);
                                     fullQueue.put(tuple);
                                     rightBufs[rightIndex] = null;
