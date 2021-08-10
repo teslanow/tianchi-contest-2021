@@ -423,7 +423,14 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     int leftIndex = (int)(val >> SHIFTBITNUM);
                                     if(leftBufs[leftIndex] == null)
                                     {
-                                        leftBufs[leftIndex] = emptyQueue.take();
+                                        Tuple tuple  = emptyQueue.poll();
+                                        if(tuple == null)
+                                        {
+                                            tuple = new Tuple(0, 0, 0, null);
+                                            tuple.val4 = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
+                                            tuple.val4.order(ByteOrder.LITTLE_ENDIAN);
+                                        }
+                                        leftBufs[leftIndex] = tuple;
                                     }
                                     Tuple tuple = leftBufs[leftIndex];
                                     ByteBuffer byteBuffer = tuple.val4;
@@ -440,7 +447,14 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     int rightIndex = (int)(val >> SHIFTBITNUM);
                                     if(rightBufs[rightIndex] == null)
                                     {
-                                        rightBufs[rightIndex] = emptyQueue.take();
+                                        Tuple tuple  = emptyQueue.poll();
+                                        if(tuple == null)
+                                        {
+                                            tuple = new Tuple(0, 0, 0, null);
+                                            tuple.val4 = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
+                                            tuple.val4.order(ByteOrder.LITTLE_ENDIAN);
+                                        }
+                                        rightBufs[rightIndex] = tuple;
                                     }
                                     Tuple tuple = rightBufs[rightIndex];
                                     ByteBuffer byteBuffer = tuple.val4;
@@ -474,7 +488,14 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 int leftIndex = (int)(val >> SHIFTBITNUM);
                                 if(leftBufs[leftIndex] == null)
                                 {
-                                    leftBufs[leftIndex] = emptyQueue.take();
+                                    Tuple tuple  = emptyQueue.poll();
+                                    if(tuple == null)
+                                    {
+                                        tuple = new Tuple(0, 0, 0, null);
+                                        tuple.val4 = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
+                                        tuple.val4.order(ByteOrder.LITTLE_ENDIAN);
+                                    }
+                                    leftBufs[leftIndex] = tuple;
                                 }
                                 Tuple tuple = leftBufs[leftIndex];
                                 ByteBuffer byteBuffer = tuple.val4;
@@ -491,7 +512,14 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 int rightIndex = (int)(val >> SHIFTBITNUM);
                                 if(rightBufs[rightIndex] == null)
                                 {
-                                    rightBufs[rightIndex] = emptyQueue.take();
+                                    Tuple tuple  = emptyQueue.poll();
+                                    if(tuple == null)
+                                    {
+                                        tuple = new Tuple(0, 0, 0, null);
+                                        tuple.val4 = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
+                                        tuple.val4.order(ByteOrder.LITTLE_ENDIAN);
+                                    }
+                                    rightBufs[rightIndex] = tuple;
                                 }
                                 Tuple tuple = rightBufs[rightIndex];
                                 ByteBuffer byteBuffer = tuple.val4;
