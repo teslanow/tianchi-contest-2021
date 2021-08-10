@@ -1,7 +1,6 @@
 package com.aliyun.adb.contest;
 
 import com.aliyun.adb.contest.spi.AnalyticDB;
-import com.sun.jmx.remote.internal.ArrayQueue;
 import sun.misc.Unsafe;
 import sun.nio.ch.DirectBuffer;
 
@@ -21,7 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.SimpleFormatter;
 
 public class SimpleAnalyticDB implements AnalyticDB {
-    private static final int BUFPOOLSIZE = 2;
+
     //提交需改
     private static final long DATAIN_EACHBLOCKTHREAD = 400000; //每个线程处理的每个块的数据量（字节单位）
     private static final int BOUNDARYSIZE = 1040;
@@ -32,7 +31,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     private static final int ALLEND = (1 << THREADNUM) - 1;
     private static final long DATALENGTH = 1000000000;
     private static final long FILE_SIZE = 1000000;
-    private static final int BYTEBUFFERSIZE = 16 * 1024;
+    private static final int BYTEBUFFERSIZE = 64 * 1024;
     private static final int EACHREADSIZE = 16 * 1024 * 1024;
     private static final int TABLENUM = 2;
     private static final int COLNUM_EACHTABLE = 2;
@@ -296,20 +295,15 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 rightChannelSpinLock[j][i] = new AtomicBoolean(false);
             }
         }
-        LinkedBlockingDeque<Tuple>[] fullQueue = new LinkedBlockingDeque[THREADNUM];
-        LinkedBlockingDeque<Tuple>[] emptyQueue = new LinkedBlockingDeque[THREADNUM];
+        LinkedBlockingDeque<Tuple> fullQueue = new LinkedBlockingDeque<>(200000);
+        LinkedBlockingDeque<Tuple> emptyQueue = new LinkedBlockingDeque<>(200000);
         for(int i = 0; i < THREADNUM; i++)
         {
-            fullQueue[i] = new LinkedBlockingDeque<>(20000);
-            emptyQueue[i] = new LinkedBlockingDeque<>(20000);
-        }
-        for(int i = 0; i < THREADNUM; i++)
-        {
-            new Thread(new ProducerThread(i, readStartEachThread[i],trueSizeOfMmapEachThread[i], allFileChannel, fullQueue[i], emptyQueue[i] )).start();
+            new Thread(new ProducerThread(i, readStartEachThread[i],trueSizeOfMmapEachThread[i], allFileChannel, fullQueue, emptyQueue )).start();
         }
         for(int i = 0; i < WRITETHREAD; i++)
         {
-            new Thread(new ConsumerThread(i, fullQueue[i / 4], emptyQueue[i / 4])).start();
+            new Thread(new ConsumerThread(i, fullQueue, emptyQueue)).start();
         }
 
         latch.await();
@@ -357,13 +351,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         System.out.println("table 1 " + ( beginOrder[1][0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[1][1][BOUNDARYSIZE - 1] - 1) );
     }
 
-    private Tuple getNewTuple()
-    {
-        Tuple t = new Tuple(0, 0, 0, null);
-        t.val4 = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
-        t.val4.order(ByteOrder.LITTLE_ENDIAN);
-        return t;
-    }
+
     class ProducerThread implements Runnable{
         long[] readStart;
         long[] trueSizeOfMmap;
@@ -371,9 +359,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
         long directBufferBase;
         FileChannel[] fileChannel;
         ByteBuffer directBuffer;
+        Tuple[][][] allBufs = new Tuple[TABLENUM][COLNUM_EACHTABLE][BOUNDARYSIZE];
         Tuple[] leftBufs;
         Tuple[] rightBufs;
-        ArrayDeque<Tuple>[] leftBufPool, rightBufPool;
         LinkedBlockingDeque<Tuple> fullQueue, emptyQueue;
         ProducerThread(int threadNo, long[] readStart , long[] trueSizeOfMmap, FileChannel[] fileChannel, LinkedBlockingDeque<Tuple> fullQueue,
                        LinkedBlockingDeque<Tuple> emptyQueue)
@@ -390,25 +378,24 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
             this.directBuffer = ByteBuffer.allocateDirect(EACHREADSIZE);
             this.directBufferBase = ((DirectBuffer)directBuffer).address();
-            this.leftBufs = new Tuple[BOUNDARYSIZE];
-            this.rightBufs = new Tuple[BOUNDARYSIZE];
-            this.leftBufPool = new ArrayDeque[BOUNDARYSIZE];
-            this.rightBufPool = new ArrayDeque[BOUNDARYSIZE];
-            for(int i = 0; i < BOUNDARYSIZE; i++)
+            for(int i = 0; i < TABLENUM; i++)
             {
-                leftBufs[i] = getNewTuple();
-                rightBufs[i] = getNewTuple();
-                leftBufPool[i] = new ArrayDeque<>();
-                rightBufPool[i] = new ArrayDeque<>();
-                for(int j = 0; j < BUFPOOLSIZE - 1; j++)
+                for(int j = 0; j < COLNUM_EACHTABLE; j++)
                 {
-                    leftBufPool[i].add(getNewTuple());
-                    rightBufPool[i].add(getNewTuple());
+                    for(int k = 0; k < BOUNDARYSIZE; k++)
+                    {
+                        Tuple t = new Tuple(0, 0, 0, null);
+                        allBufs[i][j][k] = t;
+                        t.val4 = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
+                        t.val4.order(ByteOrder.LITTLE_ENDIAN);
+                    }
                 }
             }
             try{
                 for(int k = 0; k < TABLENUM; k++)
                 {
+                    leftBufs = allBufs[k][0];
+                    rightBufs = allBufs[k][1];
                     String curTableName = tabName[k];
                     long nowRead = 0, realRead, yuzhi = trueSizeOfMmap[k] - EACHREADSIZE;
                     long curReadStart = readStart[k];
@@ -446,14 +433,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                         //填入
                                         tuple.setAll(k, 0, leftIndex);
                                         fullQueue.put(tuple);
-                                        if(leftBufPool[leftIndex].isEmpty())
-                                        {
-                                            leftBufs[leftIndex] = null;
-                                        }
-                                        else
-                                        {
-                                            leftBufs[leftIndex] = leftBufPool[leftIndex].removeFirst();
-                                        }
+                                        leftBufs[leftIndex] = null;
                                     }
                                     val = 0;
                                 }else {
@@ -469,14 +449,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     if (position >= BYTEBUFFERSIZE) {
                                         tuple.setAll(k, 1, rightIndex);
                                         fullQueue.put(tuple);
-                                        if(rightBufPool[rightIndex].isEmpty())
-                                        {
-                                            rightBufs[rightIndex] = null;
-                                        }
-                                        else
-                                        {
-                                            rightBufs[rightIndex] = rightBufPool[rightIndex].removeFirst();
-                                        }
+                                        rightBufs[rightIndex] = null;
                                     }
                                     val = 0;
                                 }
@@ -511,14 +484,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     //填入
                                     tuple.setAll(k, 0, leftIndex);
                                     fullQueue.put(tuple);
-                                    if(leftBufPool[leftIndex].isEmpty())
-                                    {
-                                        leftBufs[leftIndex] = null;
-                                    }
-                                    else
-                                    {
-                                        leftBufs[leftIndex] = leftBufPool[leftIndex].removeFirst();
-                                    }
+                                    leftBufs[leftIndex] = null;
                                 }
                                 val = 0;
                             }else {
@@ -534,14 +500,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 if (position >= BYTEBUFFERSIZE) {
                                     tuple.setAll(k, 1, rightIndex);
                                     fullQueue.put(tuple);
-                                    if(rightBufPool[rightIndex].isEmpty())
-                                    {
-                                        rightBufs[rightIndex] = null;
-                                    }
-                                    else
-                                    {
-                                        rightBufs[rightIndex] = rightBufPool[rightIndex].removeFirst();
-                                    }
+                                    rightBufs[rightIndex] = null;
                                 }
                                 val = 0;
                             }
@@ -550,51 +509,37 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             val = val * 10 + (t - 48);
                         }
                     }
-//                    for(int i = 0; i < BOUNDARYSIZE; i++) {
-//                        Tuple tuple = leftBufs[i];
-//                        if(tuple == null)
-//                            continue;
-//                        ByteBuffer byteBuffer = tuple.val4;
-//                        if(byteBuffer.position() == 0)
-//                            continue;
-//                        else
-//                        {
-//                            tuple.setAll(k, 0, i);
-//                            fullQueue.put(tuple);
-//                            if(leftBufPool[i].isEmpty())
-//                            {
-//                                leftBufs[i] = null;
-//                            }
-//                            else
-//                            {
-//                                leftBufs[i] = leftBufPool[i].removeFirst();
-//                            }
-//                        }
-//                    }
-//                    for(int i = 0; i < BOUNDARYSIZE; i++)
-//                    {
-//                        Tuple tuple = rightBufs[i];
-//                        if(tuple == null)
-//                            continue;
-//                        ByteBuffer byteBuffer = tuple.val4;
-//                        if(byteBuffer.position() == 0)
-//                            continue;
-//                        else
-//                        {
-//                            tuple.setAll(k, 1, i);
-//                            fullQueue.put(tuple);
-//                            if(rightBufPool[i].isEmpty())
-//                            {
-//                                rightBufs[i] = null;
-//                            }
-//                            else
-//                            {
-//                                rightBufs[i] = rightBufPool[i].removeFirst();
-//                            }
-//                        }
-//
-//                    }
-                    System.out.println("Thread " + threadNo + " finish " + new SimpleDateFormat("HH:mm:ss").format(new Date(System.currentTimeMillis())));
+                    for(int i = 0; i < BOUNDARYSIZE; i++) {
+                        Tuple tuple = leftBufs[i];
+                        if(tuple == null)
+                            continue;
+                        ByteBuffer byteBuffer = tuple.val4;
+                        if(byteBuffer.position() == 0)
+                            continue;
+                        else
+                        {
+                            tuple.setAll(k, 0, i);
+                            fullQueue.put(tuple);
+                            leftBufs[i] = null;
+                        }
+                    }
+                    for(int i = 0; i < BOUNDARYSIZE; i++)
+                    {
+                        Tuple tuple = rightBufs[i];
+                        if(tuple == null)
+                            continue;
+                        ByteBuffer byteBuffer = tuple.val4;
+                        if(byteBuffer.position() == 0)
+                            continue;
+                        else
+                        {
+                            tuple.setAll(k, 1, i);
+                            fullQueue.put(tuple);
+                            rightBufs[i] = null;
+                        }
+
+                    }
+                    //System.out.println("Thread " + threadNo + " finish " + new SimpleDateFormat("HH:mm:ss").format(new Date(System.currentTimeMillis())));
                 }
                 endFlag.getAndAdd(1 << threadNo);
                 if(endFlag.get() == ALLEND)
@@ -677,16 +622,15 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             atomicBoolean = rightChannelSpinLock[id.val1][id.val3];
                         }
                         byteBuffer.flip();
-
+                        long s = System.currentTimeMillis();
                         //fileChannel.write(byteBuffer, start);
                         while (!atomicBoolean.compareAndSet(false, true)){}
-                        long s = System.currentTimeMillis();
                         fileChannel.write(byteBuffer);
                         atomicBoolean.set(false);
                         long e = System.currentTimeMillis();
                         writeTime += (e - s);
                         byteBuffer.clear();
-                        emptyQueue.put(id);;
+                        emptyQueue.put(id);
                     }
                 }
             } catch (IOException | InterruptedException e) {
