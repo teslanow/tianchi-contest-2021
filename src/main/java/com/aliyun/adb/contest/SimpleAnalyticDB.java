@@ -17,9 +17,6 @@ import java.util.Queue;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.SimpleFormatter;
 
 public class SimpleAnalyticDB implements AnalyticDB {
@@ -29,7 +26,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     private static final int BOUNDARYSIZE = 1040;
     private static final int QUANTILE_DATA_SIZE = 16000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
     private static final int THREADNUM = 5;
-    private static final int WRITETHREAD = 20;
+    private static final int WRITETHREAD = 10;
     private static AtomicInteger endFlag = new AtomicInteger();
     private static final int ALLEND = (1 << THREADNUM) - 1;
     private static final long DATALENGTH = 1000000000;
@@ -299,19 +296,14 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
         }
         LinkedBlockingDeque<Tuple> fullQueue = new LinkedBlockingDeque<>(200000);
-        LinkedBlockingDeque<Tuple> emptyQueueProducer = new LinkedBlockingDeque<>(200000);
-        LinkedBlockingDeque<Tuple> emptyQueueConsumer = new LinkedBlockingDeque<>(200000);
-        Lock lock2 = new ReentrantLock();
-        Condition condition1 = lock2.newCondition();
-        Condition condition2 = lock2.newCondition();
-        new Thread(new PoolThread(emptyQueueProducer, emptyQueueConsumer, condition1, condition2, lock2)).start();
+        LinkedBlockingDeque<Tuple> emptyQueue = new LinkedBlockingDeque<>(200000);
         for(int i = 0; i < THREADNUM; i++)
         {
-            new Thread(new ProducerThread(i, readStartEachThread[i],trueSizeOfMmapEachThread[i], allFileChannel, fullQueue, emptyQueueProducer, lock2, condition1, condition2)).start();
+            new Thread(new ProducerThread(i, readStartEachThread[i],trueSizeOfMmapEachThread[i], allFileChannel, fullQueue, emptyQueue )).start();
         }
         for(int i = 0; i < WRITETHREAD; i++)
         {
-            new Thread(new ConsumerThread(i, fullQueue, emptyQueueConsumer)).start();
+            new Thread(new ConsumerThread(i, fullQueue, emptyQueue)).start();
         }
 
         latch.await();
@@ -371,10 +363,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
         Tuple[] leftBufs;
         Tuple[] rightBufs;
         LinkedBlockingDeque<Tuple> fullQueue, emptyQueue;
-        Lock lock;
-        private Condition drawCondition, upCondition;
         ProducerThread(int threadNo, long[] readStart , long[] trueSizeOfMmap, FileChannel[] fileChannel, LinkedBlockingDeque<Tuple> fullQueue,
-                       LinkedBlockingDeque<Tuple> emptyQueue, Lock lock, Condition drawCondition, Condition upCondition)
+                       LinkedBlockingDeque<Tuple> emptyQueue)
         {
             this.threadNo = threadNo;
             this.readStart = readStart;
@@ -382,9 +372,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
             this.fileChannel = fileChannel;
             this.fullQueue = fullQueue;
             this.emptyQueue = emptyQueue;
-            this.lock = lock;
-            this.drawCondition = drawCondition;
-            this.upCondition = upCondition;
         }
         @Override
         public void run() {
@@ -409,6 +396,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 {
                     leftBufs = allBufs[k][0];
                     rightBufs = allBufs[k][1];
+                    String curTableName = tabName[k];
                     long nowRead = 0, realRead, yuzhi = trueSizeOfMmap[k] - EACHREADSIZE;
                     long curReadStart = readStart[k];
                     while(nowRead < yuzhi) {
@@ -435,13 +423,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     int leftIndex = (int)(val >> SHIFTBITNUM);
                                     if(leftBufs[leftIndex] == null)
                                     {
-                                        lock.lock();
-                                        while (emptyQueue.isEmpty())
-                                        {
-                                            drawCondition.signalAll();
-                                            upCondition.await();
-                                        }
-                                        lock.unlock();
                                         leftBufs[leftIndex] = emptyQueue.take();
                                     }
                                     Tuple tuple = leftBufs[leftIndex];
@@ -459,13 +440,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     int rightIndex = (int)(val >> SHIFTBITNUM);
                                     if(rightBufs[rightIndex] == null)
                                     {
-                                        lock.lock();
-                                        if(emptyQueue.isEmpty())
-                                        {
-                                            drawCondition.signalAll();
-                                            upCondition.await();
-                                        }
-                                        lock.unlock();
                                         rightBufs[rightIndex] = emptyQueue.take();
                                     }
                                     Tuple tuple = rightBufs[rightIndex];
@@ -500,13 +474,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 int leftIndex = (int)(val >> SHIFTBITNUM);
                                 if(leftBufs[leftIndex] == null)
                                 {
-                                    lock.lock();
-                                    while (emptyQueue.isEmpty())
-                                    {
-                                        drawCondition.signalAll();
-                                        upCondition.await();
-                                    }
-                                    lock.unlock();
                                     leftBufs[leftIndex] = emptyQueue.take();
                                 }
                                 Tuple tuple = leftBufs[leftIndex];
@@ -524,13 +491,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 int rightIndex = (int)(val >> SHIFTBITNUM);
                                 if(rightBufs[rightIndex] == null)
                                 {
-                                    lock.lock();
-                                    if(emptyQueue.isEmpty())
-                                    {
-                                        drawCondition.signalAll();
-                                        upCondition.await();
-                                    }
-                                    lock.unlock();
                                     rightBufs[rightIndex] = emptyQueue.take();
                                 }
                                 Tuple tuple = rightBufs[rightIndex];
@@ -610,17 +570,12 @@ public class SimpleAnalyticDB implements AnalyticDB {
         }
         @Override
         public void run() {
-            long base =  threadNo * DATAIN_EACHBLOCKTHREAD;
             long writeTime = 0;
             long times = 0;
             for(int i = 0; i < TABLENUM; i++)
             {
                 leftStart[i] = new long[BOUNDARYSIZE];
                 rightStart[i] = new long[BOUNDARYSIZE];
-                for(int j = 0; j < BOUNDARYSIZE; j++)
-                {
-                    leftStart[i][j] = rightStart[i][j] = base;
-                }
             }
             try {
                 while (true)
@@ -634,8 +589,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             {
                                 for(int k = 0; k < BOUNDARYSIZE; k++)
                                 {
-                                    blockSize[i][0][k] += (int)((leftStart[i][k] - base) >> 3);
-                                    blockSize[i][1][k] += (int)((rightStart[i][k] - base) >> 3);
+                                    blockSize[i][0][k] += (int)((leftStart[i][k]) >> 3);
+                                    blockSize[i][1][k] += (int)((rightStart[i][k]) >> 3);
                                 }
                             }
                         }
@@ -678,49 +633,4 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
         }
     }
-    class PoolThread implements Runnable
-    {
-        private LinkedBlockingDeque<Tuple> queueToProducer, queueToConsumer;
-        //drawcondition用来表示队列空的时候唤醒PoolThread,upCondition表示装满后唤醒所有等待于此的Producer线程
-        private Condition drawCondition, upCondition;
-        private Lock lock;
-        private int SIZE = 2048;
-        PoolThread(LinkedBlockingDeque<Tuple> queueToProducer, LinkedBlockingDeque<Tuple> queueToConsumer, Condition va1, Condition val2, Lock lock)
-        {
-            this.lock = lock;
-            this.drawCondition = va1;
-            this.upCondition = val2;
-            this.queueToProducer = queueToProducer;
-            this.queueToConsumer = queueToConsumer;
-        }
-        @Override
-        public void run() {
-            try {
-                for(int i = 0; i < SIZE; i++)
-                {
-                    Tuple tuple = new Tuple(0, 0, 0, null);
-                    tuple.val4 = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
-                    tuple.val4.order(ByteOrder.LITTLE_ENDIAN);
-                    queueToProducer.add(tuple);
-                }
-                while (true)
-                {
-                    lock.lock();
-                    while (!queueToProducer.isEmpty())
-                        drawCondition.await();
-
-                    for(int i = 0; i < SIZE; i++)
-                    {
-                        queueToProducer.add(queueToConsumer.take());
-                    }
-                    System.out.println("I am running at " + new SimpleDateFormat("HH:mm:ss").format(new Date(System.currentTimeMillis())) + " size " + queueToProducer.size());
-                    upCondition.signalAll();
-                    lock.unlock();
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
 }
-
