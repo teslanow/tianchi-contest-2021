@@ -366,6 +366,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
         }
         @Override
         public void run() {
+            ByteBuffer buffer = ByteBuffer.allocateDirect(TABLENUM * COLNUM_EACHTABLE * BOUNDARYSIZE * BYTEBUFFERSIZE);
+            int sliceBase = 0;
             for(int i = 0; i < TABLENUM; i++)
             {
                 for(int j = 0; j < COLNUM_EACHTABLE; j++)
@@ -374,8 +376,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     {
                         Tuple_4 t = new Tuple_4(0, 0, 0, null);
                         allBufs[i][j][k] = t;
-                        t.val4 = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
-                        t.val4.order(ByteOrder.LITTLE_ENDIAN);
+                        buffer.limit(sliceBase + BYTEBUFFERSIZE);
+                        buffer.position(sliceBase);
+                        ByteBuffer buffer1 = buffer.slice();
+                        t.val4 = buffer1;
+                        buffer1.order(ByteOrder.LITTLE_ENDIAN);
                     }
                 }
             }
@@ -532,8 +537,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
         }
     }
-    class ReadThread implements Runnable
-    {
+    class ReadThread implements Runnable {
         int threadNo;
         long[] readStart;
         long[] trueSizeOfMmap;
