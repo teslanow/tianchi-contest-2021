@@ -9,15 +9,10 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
-import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.Date;
-import java.util.Queue;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.SimpleFormatter;
 
 public class SimpleAnalyticDB implements AnalyticDB {
 
@@ -29,6 +24,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
     private static final int WRITETHREAD = 8;
     private static AtomicInteger endFlag = new AtomicInteger();
     private static final int ALLEND = (1 << THREADNUM) - 1;
+    private static final int READERTHREAD = 4;
+    private static AtomicInteger readerEndFlag = new AtomicInteger();
+    private static final int ALLREADEREND = (1 << READERTHREAD) - 1;
     private static final long DATALENGTH = 1000000000;
     private static final long FILE_SIZE = 1000000;
     private static final int BYTEBUFFERSIZE = 64 * 1024;
@@ -196,11 +194,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
         byteBuffer.clear();
         channel.read(byteBuffer);
         inFile.close();
-//        System.out.println("BOUNDARAY " + BOUNDARYSIZE);
-//        System.out.println(Arrays.toString(curBeginOrder));
-//        System.out.println("" + ( byteBuffer.position() >> 3) );
-//        System.out.println("real size " + (beginOrder[flag_table][flag_colum][index + 1] - beginOrder[flag_table][flag_colum][index]));
-//        System.out.println("get size " + (left_size >> 3));
         ans = MyFind.quickFind(unsafe, byteBufferBase ,byteBufferBase + left_size - 8, ((long)rankDiff << 3)).toString();
         long e1 = System.currentTimeMillis();
         System.out.println("one quantile time is " + (e1 - s1) + " percentile " + percentile + "rank "+ rank + " index " + index  + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum] + " " + ans);
@@ -216,8 +209,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 beginOrder[j][1][i] = 0;
             }
         }
-        long[][] readStartEachThread = new long[THREADNUM][TABLENUM];
-        long[][] trueSizeOfMmapEachThread = new long[THREADNUM][TABLENUM];
+        long[][] readStartEachThread = new long[READERTHREAD][TABLENUM];
+        long[][] trueSizeOfMmapEachThread = new long[READERTHREAD][TABLENUM];
         FileChannel[] allFileChannel = new FileChannel[TABLENUM];
         byte[] bytes = new byte[42];
         ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
@@ -228,7 +221,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
             FileChannel channel = fis.getChannel();
             allFileChannel[k] = channel;
             long size = channel.size();
-            long sizePerBuffer = size / THREADNUM;
+            long sizePerBuffer = size / READERTHREAD;
             byteBuffer.clear();
             channel.read(byteBuffer);
             long hasReadByte = 0;
@@ -250,9 +243,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
             tabName[k] = dataFile.getName();
 
 
-            for(int i = 0; i < THREADNUM; i++)
+            for(int i = 0; i < READERTHREAD; i++)
             {
-                if(i == THREADNUM - 1)
+                if(i == READERTHREAD - 1)
                 {
                     readStartEachThread[i][k] = hasReadByte;
                     trueSizeOfMmapEachThread[i][k] = size - hasReadByte;
@@ -295,11 +288,17 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 rightChannelSpinLock[j][i] = new AtomicBoolean(false);
             }
         }
-        LinkedBlockingDeque<Tuple> fullQueue = new LinkedBlockingDeque<>(200000);
-        LinkedBlockingDeque<Tuple> emptyQueue = new LinkedBlockingDeque<>(200000);
+        LinkedBlockingDeque<Tuple_3> fullQueueToReader = new LinkedBlockingDeque<>(200);
+        LinkedBlockingDeque<Tuple_3> emptyQueueToReader = new LinkedBlockingDeque<>(200);
+        LinkedBlockingDeque<Tuple_4> fullQueue = new LinkedBlockingDeque<>(200000);
+        LinkedBlockingDeque<Tuple_4> emptyQueue = new LinkedBlockingDeque<>(200000);
+        for(int i = 0; i < READERTHREAD; i++)
+        {
+            new Thread(new ReadThread(i, readStartEachThread[i], trueSizeOfMmapEachThread[i], allFileChannel, fullQueueToReader, emptyQueueToReader)).start();
+        }
         for(int i = 0; i < THREADNUM; i++)
         {
-            new Thread(new ProducerThread(i, readStartEachThread[i],trueSizeOfMmapEachThread[i], allFileChannel, fullQueue, emptyQueue )).start();
+            new Thread(new CaculThread(i, fullQueue, emptyQueue , fullQueueToReader, emptyQueueToReader)).start();
         }
         for(int i = 0; i < WRITETHREAD; i++)
         {
@@ -352,39 +351,28 @@ public class SimpleAnalyticDB implements AnalyticDB {
     }
 
 
-    class ProducerThread implements Runnable{
-        long[] readStart;
-        long[] trueSizeOfMmap;
+    class CaculThread implements Runnable{
         int threadNo;
-        long directBufferBase;
-        FileChannel[] fileChannel;
-        ByteBuffer directBuffer;
-        Tuple[][][] allBufs = new Tuple[TABLENUM][COLNUM_EACHTABLE][BOUNDARYSIZE];
-        Tuple[] leftBufs;
-        Tuple[] rightBufs;
-        LinkedBlockingDeque<Tuple> fullQueue, emptyQueue;
-        ProducerThread(int threadNo, long[] readStart , long[] trueSizeOfMmap, FileChannel[] fileChannel, LinkedBlockingDeque<Tuple> fullQueue,
-                       LinkedBlockingDeque<Tuple> emptyQueue)
+        Tuple_4[][][] allBufs = new Tuple_4[TABLENUM][COLNUM_EACHTABLE][BOUNDARYSIZE];
+        LinkedBlockingDeque<Tuple_4> fullQueue, emptyQueue;
+        LinkedBlockingDeque<Tuple_3> fullQueueToReader, emptyQueueToReader;
+        CaculThread(int threadNo, LinkedBlockingDeque<Tuple_4> fullQueue, LinkedBlockingDeque<Tuple_4> emptyQueue, LinkedBlockingDeque<Tuple_3> fullQueueToReader, LinkedBlockingDeque<Tuple_3>emptyQueueToReader)
         {
+            this.emptyQueueToReader = emptyQueueToReader;
+            this.fullQueueToReader = fullQueueToReader;
             this.threadNo = threadNo;
-            this.readStart = readStart;
-            this.trueSizeOfMmap = trueSizeOfMmap;
-            this.fileChannel = fileChannel;
             this.fullQueue = fullQueue;
             this.emptyQueue = emptyQueue;
         }
         @Override
         public void run() {
-
-            this.directBuffer = ByteBuffer.allocateDirect(EACHREADSIZE);
-            this.directBufferBase = ((DirectBuffer)directBuffer).address();
             for(int i = 0; i < TABLENUM; i++)
             {
                 for(int j = 0; j < COLNUM_EACHTABLE; j++)
                 {
                     for(int k = 0; k < BOUNDARYSIZE; k++)
                     {
-                        Tuple t = new Tuple(0, 0, 0, null);
+                        Tuple_4 t = new Tuple_4(0, 0, 0, null);
                         allBufs[i][j][k] = t;
                         t.val4 = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
                         t.val4.order(ByteOrder.LITTLE_ENDIAN);
@@ -392,177 +380,88 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 }
             }
             try{
-                for(int k = 0; k < TABLENUM; k++)
+                Tuple_3 ava_tuple = null, used_tuple = null;
+                while (true)
                 {
-                    leftBufs = allBufs[k][0];
-                    rightBufs = allBufs[k][1];
-                    String curTableName = tabName[k];
-                    long nowRead = 0, realRead, yuzhi = trueSizeOfMmap[k] - EACHREADSIZE;
-                    long curReadStart = readStart[k];
-                    while(nowRead < yuzhi) {
-                        realRead = EACHREADSIZE;
-                        directBuffer.clear();
-                        fileChannel[k].read(directBuffer, curReadStart + nowRead);
-                        for(int i = (int)realRead-1; i >= 0; i--) {
-                            if(unsafe.getByte(directBufferBase + i) != 10) {
-                                realRead--;
-                            } else {
-                                break;
-                            }
-                        }
-                        nowRead += realRead;
-                        long val = 0;
-                        long position;
-                        byte t;
-                        long curPos = directBufferBase;
-                        long endPos = directBufferBase + realRead;
-                        for(; curPos < endPos; curPos++) {
-                            t = unsafe.getByte(curPos);
-                            if((t & 16) == 0) {
-                                if(t == 44) {
-                                    int leftIndex = (int)(val >> SHIFTBITNUM);
-                                    if(leftBufs[leftIndex] == null)
-                                    {
-                                        leftBufs[leftIndex] = emptyQueue.take();
-                                    }
-                                    Tuple tuple = leftBufs[leftIndex];
+                    ava_tuple = fullQueueToReader.take();
+                    if(used_tuple != null)
+                        emptyQueueToReader.put(used_tuple);
+                    if(ava_tuple.val3 == null)
+                    {
+                        for(int i = 0; i < TABLENUM; i++)
+                        {
+                            for(int j = 0; j < COLNUM_EACHTABLE; j++)
+                            {
+                                for(int k = 0; k < BOUNDARYSIZE; k++)
+                                {
+                                    Tuple_4 tuple = allBufs[i][j][k];
+                                    if(tuple == null)
+                                        continue;
                                     ByteBuffer byteBuffer = tuple.val4;
-                                    byteBuffer.putLong(val);
-                                    position = byteBuffer.position();
-                                    if (position == BYTEBUFFERSIZE) {
-                                        //填入
-                                        tuple.setAll(k, 0, leftIndex);
-                                        fullQueue.put(tuple);
-                                        leftBufs[leftIndex] = null;
-                                    }
-                                    val = 0;
-                                }else {
-                                    int rightIndex = (int)(val >> SHIFTBITNUM);
-                                    if(rightBufs[rightIndex] == null)
+                                    if(byteBuffer.position() == 0)
+                                        continue;
+                                    else
                                     {
-                                        rightBufs[rightIndex] = emptyQueue.take();
-                                    }
-                                    Tuple tuple = rightBufs[rightIndex];
-                                    ByteBuffer byteBuffer = tuple.val4;
-                                    byteBuffer.putLong(val);
-                                    position = byteBuffer.position();
-                                    if (position == BYTEBUFFERSIZE) {
-                                        tuple.setAll(k, 1, rightIndex);
+                                        tuple.setAll(i, j, k);
                                         fullQueue.put(tuple);
-                                        rightBufs[rightIndex] = null;
                                     }
-                                    val = 0;
                                 }
                             }
-                            else {
-                                val = val * 10 + (t - 48);
+                        }
+                        if(endFlag.addAndGet(1 << threadNo) == ALLEND)
+                        {
+                            for(int i = 0; i < WRITETHREAD;i++)
+                            {
+                                fullQueue.put(new Tuple_4(0, 0, 0, null));
                             }
                         }
+                        return;
                     }
-                    realRead = trueSizeOfMmap[k] - nowRead;
-                    directBuffer.clear();
-                    fileChannel[k].read(directBuffer, curReadStart + nowRead);
-                    long val = 0;
-                    long position = 0;
+                    long curPos = ava_tuple.val2;
+                    long endPos = curPos + ava_tuple.val3.limit();
+                    long val = 0, position = 0;
                     byte t;
-                    long curPos = directBufferBase;
-                    long endPos = directBufferBase + realRead;
+                    int table_index = ava_tuple.val1;
+                    int col_index = 0;
                     for(; curPos < endPos; curPos++) {
                         t = unsafe.getByte(curPos);
                         if((t & 16) == 0) {
-                            if(t == 44) {
-                                int leftIndex = (int)(val >> SHIFTBITNUM);
-                                if(leftBufs[leftIndex] == null)
-                                {
-                                    leftBufs[leftIndex] = emptyQueue.take();
-                                }
-                                Tuple tuple = leftBufs[leftIndex];
-                                ByteBuffer byteBuffer = tuple.val4;
-                                byteBuffer.putLong(val);
-                                position = byteBuffer.position();
-                                if (position == BYTEBUFFERSIZE) {
-                                    //填入
-                                    tuple.setAll(k, 0, leftIndex);
-                                    fullQueue.put(tuple);
-                                    leftBufs[leftIndex] = null;
-                                }
-                                val = 0;
-                            }else {
-                                int rightIndex = (int)(val >> SHIFTBITNUM);
-                                if(rightBufs[rightIndex] == null)
-                                {
-                                    rightBufs[rightIndex] = emptyQueue.take();
-                                }
-                                Tuple tuple = rightBufs[rightIndex];
-                                ByteBuffer byteBuffer = tuple.val4;
-                                byteBuffer.putLong(val);
-                                position = byteBuffer.position();
-                                if (position == BYTEBUFFERSIZE) {
-                                    tuple.setAll(k, 1, rightIndex);
-                                    fullQueue.put(tuple);
-                                    rightBufs[rightIndex] = null;
-                                }
-                                val = 0;
+                            int partition_index = (int)(val >> SHIFTBITNUM);
+                            if(allBufs[table_index][col_index][partition_index] == null)
+                            {
+                                allBufs[table_index][col_index][partition_index] = emptyQueue.take();
                             }
+                            Tuple_4 tuple = allBufs[table_index][col_index][partition_index];
+                            ByteBuffer byteBuffer = tuple.val4;
+                            byteBuffer.putLong(val);
+                            position = byteBuffer.position();
+                            if (position == BYTEBUFFERSIZE) {
+                                //填入
+                                tuple.setAll(ava_tuple.val1, col_index, partition_index);
+                                fullQueue.put(tuple);
+                                allBufs[table_index][col_index][partition_index] = null;
+                            }
+                            col_index = (col_index + 1) % TABLENUM;
+                            val = 0;
                         }
                         else {
                             val = val * 10 + (t - 48);
                         }
                     }
-                    for(int i = 0; i < BOUNDARYSIZE; i++) {
-                        Tuple tuple = leftBufs[i];
-                        if(tuple == null)
-                            continue;
-                        ByteBuffer byteBuffer = tuple.val4;
-                        if(byteBuffer.position() == 0)
-                            continue;
-                        else
-                        {
-                            tuple.setAll(k, 0, i);
-                            fullQueue.put(tuple);
-                            leftBufs[i] = null;
-                        }
-                    }
-                    for(int i = 0; i < BOUNDARYSIZE; i++)
-                    {
-                        Tuple tuple = rightBufs[i];
-                        if(tuple == null)
-                            continue;
-                        ByteBuffer byteBuffer = tuple.val4;
-                        if(byteBuffer.position() == 0)
-                            continue;
-                        else
-                        {
-                            tuple.setAll(k, 1, i);
-                            fullQueue.put(tuple);
-                            rightBufs[i] = null;
-                        }
-
-                    }
-                    //System.out.println("Thread " + threadNo + " finish " + new SimpleDateFormat("HH:mm:ss").format(new Date(System.currentTimeMillis())));
+                    used_tuple = ava_tuple;
                 }
-                endFlag.getAndAdd(1 << threadNo);
-                if(endFlag.get() == ALLEND)
-                {
-                    for(int i = 0; i < WRITETHREAD;i++)
-                    {
-                        fullQueue.put(new Tuple(0, 0, 0, null));
-                    }
-                }
-
             }catch (Exception e){
                 e.printStackTrace();
             }
 
-
         }
     }
     class ConsumerThread implements Runnable{
-        LinkedBlockingDeque<Tuple> fullQueue, emptyQueue;
+        LinkedBlockingDeque<Tuple_4> fullQueue, emptyQueue;
         long[][] leftStart = new long[TABLENUM][BOUNDARYSIZE];
         long[][] rightStart = new long[TABLENUM][BOUNDARYSIZE];
         int threadNo;
-        ConsumerThread(int threadNo, LinkedBlockingDeque<Tuple> fullQueue, LinkedBlockingDeque<Tuple> emptyQueue)
+        ConsumerThread(int threadNo, LinkedBlockingDeque<Tuple_4> fullQueue, LinkedBlockingDeque<Tuple_4> emptyQueue)
         {
             this.threadNo = threadNo;
             this.fullQueue = fullQueue;
@@ -580,7 +479,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
             try {
                 while (true)
                 {
-                    Tuple id = fullQueue.take();
+                    Tuple_4 id = fullQueue.take();
                     if(id.val4 == null)
                     {
                         synchronized (blockSize)
@@ -631,6 +530,80 @@ public class SimpleAnalyticDB implements AnalyticDB {
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
             }
+        }
+    }
+    class ReadThread implements Runnable
+    {
+        int threadNo;
+        long[] readStart;
+        long[] trueSizeOfMmap;
+        FileChannel[] fileChannel;
+        LinkedBlockingDeque<Tuple_3> fullQueue;
+        LinkedBlockingDeque<Tuple_3> emptyQueue;
+        ReadThread(int threadNo, long[] readStart , long[] trueSizeOfMmap, FileChannel[] fileChannel, LinkedBlockingDeque<Tuple_3> fullQueue, LinkedBlockingDeque<Tuple_3> emptyQueue)
+        {
+            this.readStart = readStart;
+            this.trueSizeOfMmap = trueSizeOfMmap;
+            this.fileChannel = fileChannel;
+            this.threadNo = threadNo;
+            this.fullQueue = fullQueue;
+            this.emptyQueue = emptyQueue;
+        }
+        @Override
+        public void run() {
+            try {
+                for(int i = 0; i < 2; i++)
+                {
+                    ByteBuffer directBuffer = ByteBuffer.allocateDirect(EACHREADSIZE);
+                    long directBufferBase = ((DirectBuffer)directBuffer).address();
+                    emptyQueue.put(new Tuple_3(0, directBufferBase, directBuffer));
+                }
+                for(int k = 0; k < TABLENUM; k++)
+                {
+                    long nowRead = 0, realRead, yuzhi = trueSizeOfMmap[k] - EACHREADSIZE;
+                    long curReadStart = readStart[k];
+                    while(nowRead < yuzhi) {
+                        realRead = EACHREADSIZE;
+                        Tuple_3 tuple_3 = emptyQueue.take();
+                        ByteBuffer directBuffer = tuple_3.val3;
+                        long directBufferBase = tuple_3.val2;
+                        directBuffer.clear();
+                        fileChannel[k].read(directBuffer, curReadStart + nowRead);
+                        for(int i = (int)realRead-1; i >= 0; i--) {
+                            if(unsafe.getByte(directBufferBase + i) != 10) {
+                                realRead--;
+                            } else {
+                                break;
+                            }
+                        }
+                        nowRead += realRead;
+                        directBuffer.limit((int)realRead);
+                        tuple_3.val1 = k;
+                        fullQueue.put(tuple_3);
+                    }
+                    realRead = trueSizeOfMmap[k] - nowRead;
+                    Tuple_3 tuple_3 = emptyQueue.take();
+                    ByteBuffer directBuffer = tuple_3.val3;
+                    directBuffer.clear();
+                    fileChannel[k].read(directBuffer, curReadStart + nowRead);
+                    directBuffer.limit((int)realRead);
+                    tuple_3.val1 = k;
+                    fullQueue.put(tuple_3);
+                }
+                if(readerEndFlag.addAndGet(1 << threadNo) == ALLREADEREND)
+                {
+                    for(int i = 0; i < THREADNUM; i++)
+                    {
+                        fullQueue.put(new Tuple_3(0, 0, null));
+                    }
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+
         }
     }
 }
