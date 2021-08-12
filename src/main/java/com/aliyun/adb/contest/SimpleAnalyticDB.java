@@ -367,7 +367,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 rightBufs[i].order(ByteOrder.LITTLE_ENDIAN);
             }
             try{
-                FileChannel ff = new RandomAccessFile(new File("" + threadNo), "rw").getChannel();
+                FileChannel ff = new RandomAccessFile(new File(workDir + "/" + threadNo), "rw").getChannel();
                 for(int k = 0; k < TABLENUM; k++)
                 {
                     long nowRead = 0, realRead, yuzhi = trueSizeOfMmap[k] - EACHREADSIZE;
