@@ -21,7 +21,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     private static final int BOUNDARYSIZE = 1040;
     private static final int QUANTILE_DATA_SIZE = 16000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
     private static final int THREADNUM = 14;
-    private static final int WRITETHREAD = 18;
+    private static final int WRITETHREAD = 9;
     private static AtomicInteger endFlag = new AtomicInteger();
     private static final int ALLEND = (1 << THREADNUM) - 1;
     private static final int READERTHREAD = 9;
