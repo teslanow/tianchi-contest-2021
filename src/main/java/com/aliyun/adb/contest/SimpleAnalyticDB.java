@@ -194,8 +194,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
         ans = MyFind.quickFind(unsafe, byteBufferBase ,byteBufferBase + left_size - 8, ((long)rankDiff << 3)).toString();
         long e1 = System.currentTimeMillis();
         System.out.println("one quantile time is " + (e1 - s1) + " percentile " + percentile + "rank "+ rank + " index " + index  + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum] + " " + ans);
-//        return "0";
-        return ans;
+        return "0";
+//        return ans;
     }
 
     private void loadStore(File[] dataFileList) throws Exception {
