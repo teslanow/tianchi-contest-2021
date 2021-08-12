@@ -421,12 +421,12 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             position = byteBuffer.position();
                             if(position >= BYTEBUFFERSIZE)
                             {
-                                FileChannel fileChannel = allChannel[table_i][col_i][block_i];
-                                AtomicBoolean atomicBoolean = allChannelSpinLock[table_i][col_i][block_i];
+                                //FileChannel fileChannel = allChannel[table_i][col_i][block_i];
+                                //AtomicBoolean atomicBoolean = allChannelSpinLock[table_i][col_i][block_i];
                                 byteBuffer.flip();
-                                while (!atomicBoolean.compareAndSet(false, true)){}
-                                fileChannel.write(byteBuffer);
-                                atomicBoolean.set(false);
+                                //while (!atomicBoolean.compareAndSet(false, true)){}
+                                ff.write(byteBuffer);
+                                //atomicBoolean.set(false);
                                 byteBuffer.clear();
                                 col_i ^= 0x1;
                             }
