@@ -369,7 +369,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
             try{
                 for(int k = 0; k < TABLENUM; k++)
                 {
-                    String curTableName = tabName[k];
                     long nowRead = 0, realRead, yuzhi = trueSizeOfMmap[k] - EACHREADSIZE;
                     long curReadStart = readStart[k];
                     while(nowRead < yuzhi) {
