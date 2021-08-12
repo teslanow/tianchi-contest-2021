@@ -20,7 +20,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     private static final long DATAIN_EACHBLOCKTHREAD = 400000; //每个线程处理的每个块的数据量（字节单位）
     private static final int BOUNDARYSIZE = 1040;
     private static final int QUANTILE_DATA_SIZE = 16000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
-    private static final int THREADNUM = 14;
+    private static final int THREADNUM = 20;
     private static final int WRITETHREAD = 9;
     private static AtomicInteger endFlag = new AtomicInteger();
     private static final int ALLEND = (1 << THREADNUM) - 1;
@@ -383,9 +383,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 Tuple_3 ava_tuple = null, used_tuple = null;
                 while (true)
                 {
-                    ava_tuple = fullQueueToReader.take();
                     if(used_tuple != null)
                         emptyQueueToReader.put(used_tuple);
+                    ava_tuple = fullQueueToReader.take();
                     if(ava_tuple.val3 == null)
                     {
                         for(int i = 0; i < TABLENUM; i++)
