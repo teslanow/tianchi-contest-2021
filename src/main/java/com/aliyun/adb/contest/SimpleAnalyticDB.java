@@ -356,16 +356,27 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
         @Override
         public void run() {
-
+            ByteBuffer byteBuffer1 = ByteBuffer.allocateDirect(BOUNDARYSIZE * BYTEBUFFERSIZE * COLNUM_EACHTABLE);
             this.leftBufs = new ByteBuffer[BOUNDARYSIZE];
             this.rightBufs = new ByteBuffer[BOUNDARYSIZE];
             this.directBuffer = ByteBuffer.allocateDirect(EACHREADSIZE);
             this.directBufferBase = ((DirectBuffer)directBuffer).address();
+            int base = 0;
             for (int i = 0; i < BOUNDARYSIZE; i++) {
-                leftBufs[i] = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
+                byteBuffer1.limit(base + BYTEBUFFERSIZE);
+                byteBuffer1.position(base);
+                leftBufs[i] = byteBuffer1.slice();
                 leftBufs[i].order(ByteOrder.LITTLE_ENDIAN);
+                base += BYTEBUFFERSIZE;
+
+            }
+            for(int i = 0; i < BOUNDARYSIZE; i++)
+            {
+                byteBuffer1.limit(base + BYTEBUFFERSIZE);
+                byteBuffer1.position(base);
                 rightBufs[i] = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
                 rightBufs[i].order(ByteOrder.LITTLE_ENDIAN);
+                base += BYTEBUFFERSIZE;
             }
             try{
                 for(int k = 0; k < TABLENUM; k++)
@@ -426,7 +437,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 }
                             }
                             else {
-                                val = val * 10 + (t - 48);
+                                val = (val << 1) + (val << 3) + (t - 48);
                             }
                         }
                     }
@@ -474,7 +485,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             }
                         }
                         else {
-                            val = val * 10 + (t - 48);
+                            val = (val << 1) + (val << 3) + (t - 48);
                         }
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++) {
