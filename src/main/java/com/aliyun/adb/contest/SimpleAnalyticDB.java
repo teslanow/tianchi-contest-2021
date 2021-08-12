@@ -382,7 +382,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
             Tuple_3 ava_tuple = null, used_tuple = null;
             try {
-                FileChannel ff = new RandomAccessFile(new File("" + threadNo), "rw" ).getChannel();
+                FileChannel ff = new RandomAccessFile(new File("" + workDir + "/" + threadNo), "rw" ).getChannel();
                 while (true)
                 {
                     used_tuple = ava_tuple;
@@ -391,7 +391,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     ava_tuple = fullQueue.take();
                     //System.out.println("Consumer thread " + threadNo  +  "get at " + new SimpleDateFormat("mm:ss").format(new Date(System.currentTimeMillis())));
                     if(ava_tuple.val3 == null) {
-                        System.out.println("Consumer thread " + threadNo  +  "come here  at " + new SimpleDateFormat("mm:ss").format(new Date(System.currentTimeMillis())));
+                        //System.out.println("Consumer thread " + threadNo  +  "come here  at " + new SimpleDateFormat("mm:ss").format(new Date(System.currentTimeMillis())));
                         for (int i = 0; i < TABLENUM; i++) {
                             for (int j = 0; j < COLNUM_EACHTABLE; j++) {
                                 int start_index = threadNo * 52;
