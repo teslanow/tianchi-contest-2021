@@ -9,13 +9,17 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Date;
+import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class SimpleAnalyticDB implements AnalyticDB {
+    private Random random = new Random();
     private static final int PRODUCERTHREAD = 4;
     private static final int ALLREADEREND = (1 << PRODUCERTHREAD) - 1;
     private static final int AVALIABLE_BUFFERNUM = 10;
@@ -363,6 +367,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         }
         @Override
         public void run() {
+
             for(int i = 0; i < TABLENUM; i++)
             {
                 for(int j = 0; j < COLNUM_EACHTABLE; j++)
@@ -376,25 +381,30 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
             Tuple_3 ava_tuple = null, used_tuple = null;
             try {
+                FileChannel ff = new RandomAccessFile(new File("" + threadNo), "rw" ).getChannel();
                 while (true)
                 {
                     used_tuple = ava_tuple;
                     if(used_tuple != null)
                         emptyQueue.put(used_tuple);
                     ava_tuple = fullQueue.take();
+                    //System.out.println("Consumer thread " + threadNo  +  "get at " + new SimpleDateFormat("mm:ss").format(new Date(System.currentTimeMillis())));
                     if(ava_tuple.val3 == null) {
+                        System.out.println("Consumer thread " + threadNo  +  "come here  at " + new SimpleDateFormat("mm:ss").format(new Date(System.currentTimeMillis())));
                         for (int i = 0; i < TABLENUM; i++) {
                             for (int j = 0; j < COLNUM_EACHTABLE; j++) {
+                                int start_index = threadNo * 52;
                                 for (int k = 0; k < BOUNDARYSIZE; k++) {
-                                    ByteBuffer b = allBufs[i][j][k];
-                                        b.flip();
-                                        allChannel[i][j][k].write(b);
+                                    ByteBuffer b = allBufs[i][j][start_index];
+                                    b.flip();
+                                    ff.write(b);
                                 }
                             }
                         }
                         latch.countDown();
                         return;
                     }
+                    //System.out.println("Consumer thread " + threadNo  +  "start to run at  " + new SimpleDateFormat("mm:ss").format(new Date(System.currentTimeMillis())));
                     long val = 0;
                     long position;
                     byte t;
@@ -467,6 +477,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     while(nowRead < yuzhi) {
                         realRead = EACHREADSIZE;
                         Tuple_3 tuple_3 = emptyQueue.take();
+                        //System.out.println("Thread " + threadNo + " read at " + new SimpleDateFormat("mm:ss").format(new Date(System.currentTimeMillis())));
                         ByteBuffer directBuffer = tuple_3.val3;
                         long directBufferBase = tuple_3.val2;
                         directBuffer.clear();
