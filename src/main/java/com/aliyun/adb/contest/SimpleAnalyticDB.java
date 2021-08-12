@@ -295,6 +295,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         {
             new Thread(new ProducerTask(i, readStartEachThread[i], trueSizeOfMmapEachThread[i], allFileChannel, fullQueue, emptyQueue)).start();
         }
+        Thread.sleep(10000);
         for(int i = 0; i < THREADNUM; i++)
         {
             new Thread(new ConsumerTask(i, fullQueue, emptyQueue)).start();
