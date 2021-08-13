@@ -465,11 +465,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //                                        while (!atomicBoolean.compareAndSet(false, true)){}
 //                                        channel.write(bigBuffer);
 //                                        atomicBoolean.set(false);
-                                        for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
-                                        {
-                                            leftSizeInBigFile[i].addLast((int)(leftSmallBufsCurPos[i] - leftSmallBufsBase[i]));
-                                            leftSmallBufsCurPos[i] = leftSmallBufsBase[i];
-                                        }
+//                                        for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
+//                                        {
+//                                            leftSizeInBigFile[i].addLast((int)(leftSmallBufsCurPos[i] - leftSmallBufsBase[i]));
+//                                            leftSmallBufsCurPos[i] = leftSmallBufsBase[i];
+//                                        }
                                     }
                                     val = 0;
                                 }else {
@@ -485,11 +485,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //                                        while (!atomicBoolean.compareAndSet(false, true)){}
 //                                        channel.write(bigBuffer);
 //                                        atomicBoolean.set(false);
-                                        for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
-                                        {
-                                            rightSizeInBigFile[i].addLast((int)(rightSmallBufsCurPos[i] - rightSmallBufsBase[i]));
-                                            rightSmallBufsCurPos[i] = rightSmallBufsBase[i];
-                                        }
+//                                        for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
+//                                        {
+//                                            rightSizeInBigFile[i].addLast((int)(rightSmallBufsCurPos[i] - rightSmallBufsBase[i]));
+//                                            rightSmallBufsCurPos[i] = rightSmallBufsBase[i];
+//                                        }
                                     }
                                     val = 0;
                                 }
@@ -523,11 +523,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //                                        while (!atomicBoolean.compareAndSet(false, true)){}
 //                                        channel.write(bigBuffer);
 //                                        atomicBoolean.set(false);
-                                    for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
-                                    {
-                                        leftSizeInBigFile[i].addLast((int)(leftSmallBufsCurPos[i] - leftSmallBufsBase[i]));
-                                        leftSmallBufsCurPos[i] = leftSmallBufsBase[i];
-                                    }
+//                                    for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
+//                                    {
+//                                        leftSizeInBigFile[i].addLast((int)(leftSmallBufsCurPos[i] - leftSmallBufsBase[i]));
+//                                        leftSmallBufsCurPos[i] = leftSmallBufsBase[i];
+//                                    }
                                 }
                                 val = 0;
                             }else {
@@ -543,11 +543,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //                                        while (!atomicBoolean.compareAndSet(false, true)){}
 //                                        channel.write(bigBuffer);
 //                                        atomicBoolean.set(false);
-                                    for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
-                                    {
-                                        rightSizeInBigFile[i].addLast((int)(rightSmallBufsCurPos[i] - rightSmallBufsBase[i]));
-                                        rightSmallBufsCurPos[i] = rightSmallBufsBase[i];
-                                    }
+//                                    for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
+//                                    {
+//                                        rightSizeInBigFile[i].addLast((int)(rightSmallBufsCurPos[i] - rightSmallBufsBase[i]));
+//                                        rightSmallBufsCurPos[i] = rightSmallBufsBase[i];
+//                                    }
                                 }
                                 val = 0;
                             }
@@ -568,11 +568,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //                        while (!atomicBoolean.compareAndSet(false, true)){}
 //                        channel.write(bigBuffer);
 //                        atomicBoolean.set(false);
-                        for(int j = base; j < BOUND_INTERVAL + base; j++)
-                        {
-                            leftSizeInBigFile[j].add((int)(leftSmallBufsCurPos[j] - leftSmallBufsBase[j]));
-                            leftSmallBufsCurPos[j] = leftSmallBufsBase[j];
-                        }
+//                        for(int j = base; j < BOUND_INTERVAL + base; j++)
+//                        {
+//                            leftSizeInBigFile[j].add((int)(leftSmallBufsCurPos[j] - leftSmallBufsBase[j]));
+//                            leftSmallBufsCurPos[j] = leftSmallBufsBase[j];
+//                        }
                     }
                     for(int i = 0; i < BIG_BOUNDARYSIZE; i++)
                     {
@@ -587,11 +587,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //                        while (!atomicBoolean.compareAndSet(false, true)){}
 //                        //channel.write(bigBuffer);
 //                        atomicBoolean.set(false);
-                        for(int j = base; j < BOUND_INTERVAL + base; j++)
-                        {
-                            rightSizeInBigFile[j].add((int)(rightSmallBufsCurPos[j] - rightSmallBufsBase[j]));
-                            rightSmallBufsCurPos[j] = rightSmallBufsBase[j];
-                        }
+//                        for(int j = base; j < BOUND_INTERVAL + base; j++)
+//                        {
+//                            rightSizeInBigFile[j].add((int)(rightSmallBufsCurPos[j] - rightSmallBufsBase[j]));
+//                            rightSmallBufsCurPos[j] = rightSmallBufsBase[j];
+//                        }
                     }
                 }
             }catch (Exception e){
