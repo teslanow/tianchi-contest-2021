@@ -474,6 +474,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                         AtomicBoolean atomicBoolean = leftChannelSpinLock[k][big_index];
                                         while (!atomicBoolean.compareAndSet(false, true)){}
                                         channel.write(bigBuffer);
+                                        atomicBoolean.set(false);
                                         for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
                                         {
                                             leftSizeInBigFile[i].addLast(leftSmallBufs[i].position());
@@ -496,6 +497,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                         AtomicBoolean atomicBoolean = rightChannelSpinLock[k][big_index];
                                         while (!atomicBoolean.compareAndSet(false, true)){}
                                         channel.write(bigBuffer);
+                                        atomicBoolean.set(false);
                                         for(int i = (big_index << DIFF_BITS) ; i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
                                         {
                                             rightSizeInBigFile[i].addLast(rightSmallBufs[i].position());
@@ -536,6 +538,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     AtomicBoolean atomicBoolean = leftChannelSpinLock[k][big_index];
                                     while (!atomicBoolean.compareAndSet(false, true)){}
                                     channel.write(bigBuffer);
+                                    atomicBoolean.set(false);
                                     for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
                                     {
                                         leftSizeInBigFile[i].addLast(leftSmallBufs[i].position());
@@ -558,6 +561,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     AtomicBoolean atomicBoolean = rightChannelSpinLock[k][big_index];
                                     while (!atomicBoolean.compareAndSet(false, true)){}
                                     channel.write(bigBuffer);
+                                    atomicBoolean.set(false);
                                     for(int i = (big_index << DIFF_BITS) ; i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
                                     {
                                         rightSizeInBigFile[i].addLast(rightSmallBufs[i].position());
@@ -584,6 +588,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         AtomicBoolean atomicBoolean = leftChannelSpinLock[k][i];
                         while (!atomicBoolean.compareAndSet(false, true)){}
                         channel.write(bigBuffer);
+                        atomicBoolean.set(false);
                         for(int j = base; j < BOUND_INTERVAL + base; j++)
                         {
                             leftSizeInBigFile[j].add(leftSmallBufs[j].position());
@@ -601,6 +606,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         AtomicBoolean atomicBoolean = rightChannelSpinLock[k][i];
                         while (!atomicBoolean.compareAndSet(false, true)){}
                         channel.write(bigBuffer);
+                        atomicBoolean.set(false);
                         for(int j = base; j < BOUND_INTERVAL + base; j++)
                         {
                             rightSizeInBigFile[j].add(rightSmallBufs[j].position());
