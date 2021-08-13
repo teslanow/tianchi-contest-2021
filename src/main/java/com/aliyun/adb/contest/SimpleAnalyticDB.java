@@ -307,6 +307,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 rightChannelSpinLock[j][i] = new AtomicBoolean(false);
             }
         }
+
         for(int i = 0; i < THREADNUM; i++)
         {
             new Thread(new ThreadTask(i, readStartEachThread[i], trueSizeOfMmapEachThread[i], allFileChannel)).start();
