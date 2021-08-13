@@ -9,42 +9,78 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
 
 public class SimpleAnalyticDB implements AnalyticDB {
 
+//    private static final int BOUNDARYSIZE = 130;
+//    private static final int QUANTILE_DATA_SIZE = 32000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
+//    private static final int THREADNUM = 16;
+//    private static final long DATALENGTH = 500000000;
+//    private static final int BYTEBUFFERSIZE = 1024 * 128;
+//    private static final int EACHREADSIZE = 1024 * 1024 * 16;
+//    //private static final int EACHREADSIZE = 1024;
+//    private static final int TABLENUM = 2;
+//    private static final int COLNUM_EACHTABLE = 2;
+//    private static final int SHIFTBITNUM = 56;
+//    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
+
+//    private static final int BOUNDARYSIZE = 130;
+//    private static final int QUANTILE_DATA_SIZE = 800; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
+//    private static final int THREADNUM = 1;
+//    private static final long DATALENGTH = 10000;
+//    private static final int BYTEBUFFERSIZE = 1024 * 128;
+//    private static final int EACHREADSIZE = 1024 ;
+//    //private static final int EACHREADSIZE = 1024;
+//    private static final int TABLENUM = 2;
+//    private static final int COLNUM_EACHTABLE = 2;
+//    private static final int SHIFTBITNUM = 56;
+//    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
+
     //提交需改
-    private static final int BOUNDARYSIZE = 1040;
+    private static final int BIG_BOUNDARYSIZE = 520;
     private static final int QUANTILE_DATA_SIZE = 16000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
-    private static final int THREADNUM = 40;
+    private static final int THREADNUM = 32;
     private static final long DATALENGTH = 1000000000;
-    private static final long FILE_SIZE = 1000000;
-    private static final int BYTEBUFFERSIZE = 1024 * 64;
-    private static final int EACHREADSIZE = 1024 * 1024 * 16;
+
+    private static final int EACHREADSIZE = 16 * 1024 * 1024;
     private static final int TABLENUM = 2;
     private static final int COLNUM_EACHTABLE = 2;
-    private static final int SHIFTBITNUM = 53;
+    private static final int BIG_SHIFTBITNUM = 54;
+    private static final int SMALL_REALSHIFTBITNUM = 53;
     private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
+    private static final int SMALL_BOUNDARYSIZE = 1040;
+    private static final int DIFF_BITS = (BIG_SHIFTBITNUM - SMALL_REALSHIFTBITNUM);
+    private static final int BOUND_INTERVAL = (1 << DIFF_BITS);
+    private static final int BIG_BYTEBUFFERSIZE = 64 * 1024;
+    private static final int SMALL_BYTEBUFFERSIZE = 32 * 1024;
 
     private int current_Quantile_threadNUM = 0;
-    private final String[][] colName = new String[TABLENUM][COLNUM_EACHTABLE];
-    private final String[] tabName = new String[TABLENUM];
-    private final Unsafe unsafe;
-    private final int[][][] blockSize = new int[TABLENUM][COLNUM_EACHTABLE][BOUNDARYSIZE];
-    private final int[][][] beginOrder = new int[TABLENUM][COLNUM_EACHTABLE][BOUNDARYSIZE];
-    private final long[] quantile_load_base = new long[CONCURRENT_QUANTILE_THREADNUM];
-    private final ByteBuffer[] quantile_load_buffer = new ByteBuffer[CONCURRENT_QUANTILE_THREADNUM];
-    private final long[] arrThreadId = new long[CONCURRENT_QUANTILE_THREADNUM];
+    private String[][] colName = new String[TABLENUM][COLNUM_EACHTABLE];
+    private String[] tabName = new String[TABLENUM];
+    private String curTableName;
+    private Unsafe unsafe;
+    private final int[][][] blockSize = new int[TABLENUM][COLNUM_EACHTABLE][SMALL_BOUNDARYSIZE];
+    private final int[][][] beginOrder = new int[TABLENUM][COLNUM_EACHTABLE][SMALL_BOUNDARYSIZE];
+    private long[] quantile_load_base = new long[CONCURRENT_QUANTILE_THREADNUM];
+    private ByteBuffer[] quantile_load_buffer = new ByteBuffer[CONCURRENT_QUANTILE_THREADNUM];
+    private long arrThreadId[] = new long[CONCURRENT_QUANTILE_THREADNUM];
     private static final CountDownLatch latch = new CountDownLatch(THREADNUM);
 
     //实验
-    private final FileChannel[][] leftChannel = new FileChannel[TABLENUM][BOUNDARYSIZE];
-    private final FileChannel[][] rightChannel = new FileChannel[TABLENUM][BOUNDARYSIZE];
-    private final AtomicBoolean[][] leftChannelSpinLock = new AtomicBoolean[TABLENUM][BOUNDARYSIZE];
-    private final AtomicBoolean[][] rightChannelSpinLock = new AtomicBoolean[TABLENUM][BOUNDARYSIZE];
+    private FileChannel[][] leftChannel = new FileChannel[TABLENUM][BIG_BOUNDARYSIZE];
+    private FileChannel[][] rightChannel = new FileChannel[TABLENUM][BIG_BOUNDARYSIZE];
+    private AtomicBoolean[][] leftChannelSpinLock = new AtomicBoolean[TABLENUM][BIG_BYTEBUFFERSIZE];
+    private AtomicBoolean[][] rightChannelSpinLock = new AtomicBoolean[TABLENUM][BIG_BOUNDARYSIZE];
     private  String workDir;
+
 
     public SimpleAnalyticDB() throws NoSuchFieldException, IllegalAccessException {
         this.unsafe = GetUnsafe.getUnsafe();
@@ -57,53 +93,53 @@ public class SimpleAnalyticDB implements AnalyticDB {
         long ss = System.currentTimeMillis();
         workDir = workspaceDir;
         //判断工作区是否为空
-        if(new File(workspaceDir + "/index").exists())
-        {
-            for(int i = 1; i < CONCURRENT_QUANTILE_THREADNUM; i++)
-            {
-                quantile_load_buffer[i] = ByteBuffer.allocateDirect(QUANTILE_DATA_SIZE);
-                quantile_load_base[i] = ((DirectBuffer)quantile_load_buffer[i]).address();
-            }
-            System.out.println("sencond load");
-            RandomAccessFile file = new RandomAccessFile(new File(workDir + "/index"), "r");
-            FileChannel fileChannel = file.getChannel();
-            byte[] bytes = new byte[(int)fileChannel.size()];
-            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
-            byteBuffer.clear();
-            fileChannel.read(byteBuffer);
-            byteBuffer.flip();
-            int curPos = 0;
-            String[] tmpString = new String[TABLENUM * COLNUM_EACHTABLE + TABLENUM];
-            for(int pre = 0, index = 0;;)
-            {
-                if(bytes[curPos] == 10)
-                {
-                    tmpString[index++] = new String(bytes, pre, curPos - pre, "UTF-8");
-                    if(index >= TABLENUM * COLNUM_EACHTABLE + TABLENUM)
-                    {
-                        curPos++;
-                        break;
-                    }
-                    pre = curPos + 1;
-                }
-                curPos++;
-            }
-            int index_name = 0;
-            byteBuffer.position(curPos);
-            for(int i = 0; i < TABLENUM; i++)
-            {
-                tabName[i] = tmpString[index_name++];
-                for(int j = 0; j < COLNUM_EACHTABLE; j++)
-                {
-                    colName[i][j] = tmpString[index_name++];
-                    for( int k = 0; k < BOUNDARYSIZE; k++)
-                    {
-                        beginOrder[i][j][k] = byteBuffer.getInt();
-                    }
-                }
-            }
-            return;
-        }
+//        if(new File(workspaceDir + "/index").exists())
+//        {
+//            for(int i = 1; i < CONCURRENT_QUANTILE_THREADNUM; i++)
+//            {
+//                quantile_load_buffer[i] = ByteBuffer.allocateDirect(QUANTILE_DATA_SIZE);
+//                quantile_load_base[i] = ((DirectBuffer)quantile_load_buffer[i]).address();
+//            }
+//            System.out.println("sencond load");
+//            RandomAccessFile file = new RandomAccessFile(new File(workDir + "/index"), "r");
+//            FileChannel fileChannel = file.getChannel();
+//            byte[] bytes = new byte[(int)fileChannel.size()];
+//            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
+//            byteBuffer.clear();
+//            fileChannel.read(byteBuffer);
+//            byteBuffer.flip();
+//            int curPos = 0;
+//            String[] tmpString = new String[TABLENUM * COLNUM_EACHTABLE + TABLENUM];
+//            for(int pre = 0, index = 0;;)
+//            {
+//                if(bytes[curPos] == 10)
+//                {
+//                    tmpString[index++] = new String(bytes, pre, curPos - pre, "UTF-8");
+//                    if(index >= TABLENUM * COLNUM_EACHTABLE + TABLENUM)
+//                    {
+//                        curPos++;
+//                        break;
+//                    }
+//                    pre = curPos + 1;
+//                }
+//                curPos++;
+//            }
+//            int index_name = 0;
+//            byteBuffer.position(curPos);
+//            for(int i = 0; i < TABLENUM; i++)
+//            {
+//                tabName[i] = tmpString[index_name++];
+//                for(int j = 0; j < COLNUM_EACHTABLE; j++)
+//                {
+//                    colName[i][j] = tmpString[index_name++];
+//                    for( int k = 0; k < BOUNDARYSIZE; k++)
+//                    {
+//                        beginOrder[i][j][k] = byteBuffer.getInt();
+//                    }
+//                }
+//            }
+//            return;
+//        }
         File dir = new File(tpchDataFileDir);
         loadStore(dir.listFiles());
         long end = System.currentTimeMillis();
@@ -144,7 +180,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 }
             }
         }
-        System.out.println("thread " + Thread.currentThread().getId() + " current_threadnum " + current_Quantile_threadNUM + " buffer_id " + buffer_index );
+        //System.out.println("thread " + Thread.currentThread().getId() + " current_threadnum " + current_Quantile_threadNUM + " buffer_id " + buffer_index );
         int rank = (int) Math.round(DATALENGTH * percentile);
         int index;
         int flag_table, flag_colum;
@@ -193,15 +229,15 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //        System.out.println("get size " + (left_size >> 3));
         ans = MyFind.quickFind(unsafe, byteBufferBase ,byteBufferBase + left_size - 8, ((long)rankDiff << 3)).toString();
         long e1 = System.currentTimeMillis();
-        System.out.println("one quantile time is " + (e1 - s1) + " percentile " + percentile + "rank "+ rank + " index " + index  + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum] + " " + ans);
-        return "0";
-//        return ans;
+//        System.out.println("one quantile time is " + (e1 - s1) + " percentile " + percentile + "rank "+ rank + " index " + index  + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum]);
+        //return "0";
+        return ans;
     }
 
     private void loadStore(File[] dataFileList) throws Exception {
         for(int j = 0; j < TABLENUM; j++)
         {
-            for (int i = 0; i < BOUNDARYSIZE; i++){
+            for (int i = 0; i < SMALL_BOUNDARYSIZE; i++){
                 beginOrder[j][0][i] = 0;
                 beginOrder[j][1][i] = 0;
             }
@@ -269,7 +305,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         RandomAccessFile Lrw, Rrw;
         for(int j = 0; j < TABLENUM; j++)
         {
-            for(int i = 0; i < BOUNDARYSIZE; i++)
+            for(int i = 0; i < BIG_BOUNDARYSIZE; i++)
             {
                 outLDir = workDir + "/" + tabName[j] + "-" + colName[j][0] + "-"  +  i;
                 outRDir = workDir + "/" + tabName[j] + "-" + colName[j][1] + "-" + i;
@@ -277,21 +313,20 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 RoutFile = new File(outRDir);
                 Lrw = new RandomAccessFile(LoutFile, "rw");
                 Rrw = new RandomAccessFile(RoutFile, "rw");
-                Lrw.setLength(FILE_SIZE);
-                Rrw.setLength(FILE_SIZE);
                 leftChannel[j][i] = Lrw.getChannel();
                 rightChannel[j][i] = Rrw.getChannel();
                 leftChannelSpinLock[j][i] = new AtomicBoolean(false);
                 rightChannelSpinLock[j][i] = new AtomicBoolean(false);
             }
         }
+
         for(int i = 0; i < THREADNUM; i++)
         {
             new Thread(new ThreadTask(i, readStartEachThread[i], trueSizeOfMmapEachThread[i], allFileChannel)).start();
         }
         latch.await();
 
-        StringBuilder builder= new StringBuilder(workDir).append("/index");
+        StringBuilder builder= new StringBuilder(workDir + "/index");
         FileChannel fileChannel = new RandomAccessFile(new File(builder.toString()), "rw").getChannel();
         for(int i = 0; i < TABLENUM; i++)
         {
@@ -306,16 +341,14 @@ public class SimpleAnalyticDB implements AnalyticDB {
         for(int j = 0; j < TABLENUM; j++)
         {
             int  lBry = 0, rBry = 0;
-            for (int i = 0; i < BOUNDARYSIZE; i++){
-                blockSize[j][0][i] = (int)leftChannel[j][i].position() >> 3;
-                blockSize[j][1][i] = (int)rightChannel[j][i].position() >> 3;
+            for (int i = 0; i < SMALL_BOUNDARYSIZE; i++){
                 beginOrder[j][0][i] = lBry + 1;
                 lBry += blockSize[j][0][i];
                 beginOrder[j][1][i] = rBry + 1;
                 rBry += blockSize[j][1][i];
             }
         }
-        byte[] b_t = new byte[BOUNDARYSIZE * 4];
+        byte[] b_t = new byte[SMALL_BOUNDARYSIZE * 4];
         ByteBuffer b_t_buffer = ByteBuffer.wrap(b_t);
         //b_t_buffer.order(ByteOrder.LITTLE_ENDIAN);
         for(int i = 0; i < TABLENUM; i++)
@@ -323,7 +356,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
             for(int j = 0; j < COLNUM_EACHTABLE; j++)
             {
                 b_t_buffer.clear();
-                for(int k = 0; k < BOUNDARYSIZE; k++)
+                for(int k = 0; k < SMALL_BOUNDARYSIZE; k++)
                 {
                     b_t_buffer.putInt(beginOrder[i][j][k]);
                 }
@@ -332,8 +365,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
         }
         System.out.println();
-        System.out.println("table 0 " + ( beginOrder[0][0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[0][1][BOUNDARYSIZE - 1] - 1) );
-        System.out.println("table 1 " + ( beginOrder[1][0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[1][1][BOUNDARYSIZE - 1] - 1) );
+        System.out.println("table 0 " + ( beginOrder[0][0][SMALL_BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[0][1][SMALL_BOUNDARYSIZE - 1] - 1) );
+        System.out.println("table 1 " + ( beginOrder[1][0][SMALL_BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[1][1][SMALL_BOUNDARYSIZE - 1] - 1) );
     }
 
 
@@ -344,32 +377,47 @@ public class SimpleAnalyticDB implements AnalyticDB {
         long directBufferBase;
         FileChannel[] fileChannel;
         ByteBuffer directBuffer;
-        ByteBuffer[] leftBufs;
-        ByteBuffer[] rightBufs;
+        ByteBuffer[] leftSmallBufs;
+        ByteBuffer[] rightSmallBufs;
+        long[] leftSmallBufsBase = new long[SMALL_BOUNDARYSIZE];
+        long[] rightSmallBufsBase = new long[SMALL_BOUNDARYSIZE];
+        ArrayDeque<Integer>[] leftSizeInBigFile = new ArrayDeque[SMALL_BOUNDARYSIZE];
+        ArrayDeque<Integer>[] rightSizeInBigFile = new ArrayDeque[SMALL_BOUNDARYSIZE];
+
         //初始化
         public ThreadTask(int threadNo, long[] readStart ,long[] trueSizeOfMmap, FileChannel[] fileChannel) throws Exception {
             this.threadNo = threadNo;
             this.readStart = readStart;
             this.trueSizeOfMmap = trueSizeOfMmap;
             this.fileChannel = fileChannel;
+            this.directBuffer = ByteBuffer.allocateDirect(EACHREADSIZE);
+            this.leftSmallBufs = new ByteBuffer[SMALL_BOUNDARYSIZE];
+            this.rightSmallBufs = new ByteBuffer[SMALL_BOUNDARYSIZE];
+            this.directBufferBase = ((DirectBuffer)directBuffer).address();
         }
 
         @Override
         public void run() {
-            this.leftBufs = new ByteBuffer[BOUNDARYSIZE];
-            this.rightBufs = new ByteBuffer[BOUNDARYSIZE];
-            this.directBuffer = ByteBuffer.allocateDirect(EACHREADSIZE);
-            this.directBufferBase = ((DirectBuffer)directBuffer).address();
-            for (int i = 0; i < BOUNDARYSIZE; i++) {
-                leftBufs[i] = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
-                leftBufs[i].order(ByteOrder.LITTLE_ENDIAN);
-                rightBufs[i] = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
-                rightBufs[i].order(ByteOrder.LITTLE_ENDIAN);
+            for(int i = 0; i < SMALL_BOUNDARYSIZE; i++)
+            {
+                leftSizeInBigFile[i] = new ArrayDeque<>(100);
+                rightSizeInBigFile[i] = new ArrayDeque<>(100);
             }
+            for (int i = 0; i < SMALL_BOUNDARYSIZE; i++) {
+                leftSmallBufs[i] = ByteBuffer.allocateDirect(SMALL_BYTEBUFFERSIZE);
+                leftSmallBufs[i].order(ByteOrder.LITTLE_ENDIAN);
+                rightSmallBufs[i] = ByteBuffer.allocateDirect(SMALL_BYTEBUFFERSIZE);
+                rightSmallBufs[i].order(ByteOrder.LITTLE_ENDIAN);
+                leftSmallBufsBase[i] = ((DirectBuffer)leftSmallBufs[i]).address();
+                rightSmallBufsBase[i] = ((DirectBuffer)rightSmallBufs[i]).address();
+            }
+            ByteBuffer tmpBuffer = ByteBuffer.allocateDirect(BIG_BYTEBUFFERSIZE);
+            long tmpBufferBase = ((DirectBuffer)tmpBuffer).address();
+            tmpBuffer.order(ByteOrder.LITTLE_ENDIAN);
             try{
                 for(int k = 0; k < TABLENUM; k++)
                 {
-                    String curTableName = tabName[k];
+                    curTableName = tabName[k];
                     long nowRead = 0, realRead, yuzhi = trueSizeOfMmap[k] - EACHREADSIZE;
                     long curReadStart = readStart[k];
                     while(nowRead < yuzhi) {
@@ -393,39 +441,59 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             t = unsafe.getByte(curPos);
                             if((t & 16) == 0) {
                                 if(t == 44) {
-                                    int leftIndex = (int)(val >> SHIFTBITNUM);
-                                    ByteBuffer byteBuffer = leftBufs[leftIndex];
+                                    int leftIndex = (int)(val >> SMALL_REALSHIFTBITNUM);
+                                    ByteBuffer byteBuffer = leftSmallBufs[leftIndex];
                                     byteBuffer.putLong(val);
                                     position = byteBuffer.position();
-                                    if (position >= BYTEBUFFERSIZE) {
-                                        FileChannel fileChannel = leftChannel[k][leftIndex];
-                                        AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
-                                        byteBuffer.flip();
+                                    if (position == SMALL_BYTEBUFFERSIZE) {
+                                        int big_index = leftIndex >> DIFF_BITS;
+                                        long dstBase = tmpBufferBase;
+                                        for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
+                                        {
+                                            leftSizeInBigFile[i].addLast(leftSmallBufs[i].position());
+                                            leftSmallBufs[i].clear();
+                                            unsafe.copyMemory(null, leftSmallBufsBase[i], null, dstBase, SMALL_BYTEBUFFERSIZE );
+                                            dstBase += SMALL_BYTEBUFFERSIZE;
+                                        }
+                                        tmpBuffer.limit(BIG_BYTEBUFFERSIZE);
+                                        tmpBuffer.position(BIG_BYTEBUFFERSIZE);
+                                        tmpBuffer.flip();
+                                        FileChannel channel = leftChannel[k][big_index];
+                                        AtomicBoolean atomicBoolean = leftChannelSpinLock[k][big_index];
                                         while (!atomicBoolean.compareAndSet(false, true)){}
-                                        fileChannel.write(byteBuffer);
+                                        channel.write(tmpBuffer);
                                         atomicBoolean.set(false);
-                                        byteBuffer.clear();
                                     }
                                     val = 0;
                                 }else {
-                                    int rightIndex = (int)(val >> SHIFTBITNUM);
-                                    ByteBuffer byteBuffer = rightBufs[rightIndex];
+                                    int rightIndex = (int)(val >> SMALL_REALSHIFTBITNUM);
+                                    ByteBuffer byteBuffer = rightSmallBufs[rightIndex];
                                     byteBuffer.putLong(val);
                                     position = byteBuffer.position();
-                                    if (position >= BYTEBUFFERSIZE) {
-                                        FileChannel fileChannel = rightChannel[k][rightIndex];
-                                        AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
-                                        byteBuffer.flip();
+                                    if (position == SMALL_BYTEBUFFERSIZE) {
+                                        int big_index = rightIndex >> DIFF_BITS;
+                                        long dstBase = tmpBufferBase;
+                                        for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
+                                        {
+                                            rightSizeInBigFile[i].addLast(rightSmallBufs[i].position());
+                                            rightSmallBufs[i].clear();
+                                            unsafe.copyMemory(null, rightSmallBufsBase[i], null, dstBase, SMALL_BYTEBUFFERSIZE );
+                                            dstBase += SMALL_BYTEBUFFERSIZE;
+                                        }
+                                        tmpBuffer.limit(BIG_BYTEBUFFERSIZE);
+                                        tmpBuffer.position(BIG_BYTEBUFFERSIZE);
+                                        tmpBuffer.flip();
+                                        FileChannel channel = rightChannel[k][big_index];
+                                        AtomicBoolean atomicBoolean = rightChannelSpinLock[k][big_index];
                                         while (!atomicBoolean.compareAndSet(false, true)){}
-                                        fileChannel.write(byteBuffer);
+                                        channel.write(tmpBuffer);
                                         atomicBoolean.set(false);
-                                        byteBuffer.clear();
                                     }
                                     val = 0;
                                 }
                             }
                             else {
-                                val = (val << 3) + (val << 1) + (t - 48);
+                                val = (val << 1) + (val << 3) + (t - 48);
                             }
                         }
                     }
@@ -441,67 +509,110 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         t = unsafe.getByte(curPos);
                         if((t & 16) == 0) {
                             if(t == 44) {
-                                int leftIndex = (int)(val >> SHIFTBITNUM);
-                                ByteBuffer byteBuffer = leftBufs[leftIndex];
+                                int leftIndex = (int)(val >> SMALL_REALSHIFTBITNUM);
+                                ByteBuffer byteBuffer = leftSmallBufs[leftIndex];
                                 byteBuffer.putLong(val);
                                 position = byteBuffer.position();
-                                if (position >= BYTEBUFFERSIZE) {
-                                    FileChannel fileChannel = leftChannel[k][leftIndex];
-                                    AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
-                                    byteBuffer.flip();
+                                if (position == SMALL_BYTEBUFFERSIZE) {
+                                    int big_index = leftIndex >> DIFF_BITS;
+                                    long dstBase = tmpBufferBase;
+                                    for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
+                                    {
+                                        leftSizeInBigFile[i].addLast(leftSmallBufs[i].position());
+                                        leftSmallBufs[i].clear();
+                                        unsafe.copyMemory(null, leftSmallBufsBase[i], null, dstBase, SMALL_BYTEBUFFERSIZE );
+                                        dstBase += SMALL_BYTEBUFFERSIZE;
+                                    }
+                                    tmpBuffer.limit(BIG_BYTEBUFFERSIZE);
+                                    tmpBuffer.position(BIG_BYTEBUFFERSIZE);
+                                    tmpBuffer.flip();
+                                    FileChannel channel = leftChannel[k][big_index];
+                                    AtomicBoolean atomicBoolean = leftChannelSpinLock[k][big_index];
                                     while (!atomicBoolean.compareAndSet(false, true)){}
-                                    fileChannel.write(byteBuffer);
+                                    channel.write(tmpBuffer);
                                     atomicBoolean.set(false);
-                                    byteBuffer.clear();
                                 }
                                 val = 0;
                             }else {
-                                int rightIndex = (int)(val >> SHIFTBITNUM);
-                                ByteBuffer byteBuffer = rightBufs[rightIndex];
+                                int rightIndex = (int)(val >> SMALL_REALSHIFTBITNUM);
+                                ByteBuffer byteBuffer = rightSmallBufs[rightIndex];
                                 byteBuffer.putLong(val);
                                 position = byteBuffer.position();
-                                if (position >= BYTEBUFFERSIZE) {
-                                    FileChannel fileChannel = rightChannel[k][rightIndex];
-                                    AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
-                                    byteBuffer.flip();
+                                if (position == SMALL_BYTEBUFFERSIZE) {
+                                    int big_index = rightIndex >> DIFF_BITS;
+                                    long dstBase = tmpBufferBase;
+                                    for(int i = (big_index << DIFF_BITS); i < (big_index << DIFF_BITS) + BOUND_INTERVAL; i++)
+                                    {
+                                        rightSizeInBigFile[i].addLast(rightSmallBufs[i].position());
+                                        rightSmallBufs[i].clear();
+                                        unsafe.copyMemory(null, rightSmallBufsBase[i], null, dstBase, SMALL_BYTEBUFFERSIZE );
+                                        dstBase += SMALL_BYTEBUFFERSIZE;
+                                    }
+                                    tmpBuffer.limit(BIG_BYTEBUFFERSIZE);
+                                    tmpBuffer.position(BIG_BYTEBUFFERSIZE);
+                                    tmpBuffer.flip();
+                                    FileChannel channel = rightChannel[k][big_index];
+                                    AtomicBoolean atomicBoolean = rightChannelSpinLock[k][big_index];
                                     while (!atomicBoolean.compareAndSet(false, true)){}
-                                    fileChannel.write(byteBuffer);
+                                    channel.write(tmpBuffer);
                                     atomicBoolean.set(false);
-                                    byteBuffer.clear();
                                 }
                                 val = 0;
                             }
                         }
                         else {
-                            val = (val << 3) + (val << 1) + (t - 48);
+                            val = (val << 1) + (val << 3) + (t - 48);
                         }
                     }
-                    for(int i = 0; i < BOUNDARYSIZE; i++) {
-                        FileChannel fileChannel = leftChannel[k][i];
+
+                    //System.out.println("Size " + size);
+
+                    for(int i = 0; i < BIG_BOUNDARYSIZE; i++) {
+                        int base = i << DIFF_BITS;
+                        long dstBase = tmpBufferBase;
+                        for(int j = base; j < base + BOUND_INTERVAL; j++)
+                        {
+                            leftSizeInBigFile[j].addLast(leftSmallBufs[j].position());
+                            leftSmallBufs[j].clear();
+                            unsafe.copyMemory(null, leftSmallBufsBase[j], null, dstBase, SMALL_BYTEBUFFERSIZE );
+                            dstBase += SMALL_BYTEBUFFERSIZE;
+                        }
+                        tmpBuffer.limit(BIG_BYTEBUFFERSIZE);
+                        tmpBuffer.position(BIG_BYTEBUFFERSIZE);
+                        tmpBuffer.flip();
+                        FileChannel channel = leftChannel[k][i];
                         AtomicBoolean atomicBoolean = leftChannelSpinLock[k][i];
-                        ByteBuffer byteBuffer = leftBufs[i];
-                        byteBuffer.flip();
                         while (!atomicBoolean.compareAndSet(false, true)){}
-                        fileChannel.write(byteBuffer);
+                        channel.write(tmpBuffer);
                         atomicBoolean.set(false);
-                        byteBuffer.clear();
                     }
-                    for(int i = 0; i < BOUNDARYSIZE; i++)
+                    for(int i = 0; i < BIG_BOUNDARYSIZE; i++)
                     {
-                        FileChannel fileChannel = rightChannel[k][i];
+                        int base = i << DIFF_BITS;
+                        long dstBase = tmpBufferBase;
+                        for(int j = base; j < base + BOUND_INTERVAL; j++)
+                        {
+                            rightSizeInBigFile[j].addLast(rightSmallBufs[j].position());
+                            rightSmallBufs[j].clear();
+                            unsafe.copyMemory(null, rightSmallBufsBase[j], null, dstBase, SMALL_BYTEBUFFERSIZE );
+                            dstBase += SMALL_BYTEBUFFERSIZE;
+                        }
+                        tmpBuffer.limit(BIG_BYTEBUFFERSIZE);
+                        tmpBuffer.position(BIG_BYTEBUFFERSIZE);
+                        tmpBuffer.flip();
+                        FileChannel channel = rightChannel[k][i];
                         AtomicBoolean atomicBoolean = rightChannelSpinLock[k][i];
-                        ByteBuffer byteBuffer = rightBufs[i];
-                        byteBuffer.flip();
                         while (!atomicBoolean.compareAndSet(false, true)){}
-                        fileChannel.write(byteBuffer);
+                        channel.write(tmpBuffer);
                         atomicBoolean.set(false);
-                        byteBuffer.clear();
                     }
                 }
             }catch (Exception e){
                 e.printStackTrace();
             }
             latch.countDown();
+
         }
+
     }
 }
