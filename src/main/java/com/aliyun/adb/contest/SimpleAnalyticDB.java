@@ -40,6 +40,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
 
     //提交需改
+    private static final long FILE_SIZE = 2000000;
     private static final int BOUNDARYSIZE = 520;
     private static final int QUANTILE_DATA_SIZE = 16000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
     private static final int THREADNUM = 32;
@@ -301,6 +302,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 RoutFile = new File(outRDir);
                 Lrw = new RandomAccessFile(LoutFile, "rw");
                 Rrw = new RandomAccessFile(RoutFile, "rw");
+                Lrw.setLength(FILE_SIZE);
+                Rrw.setLength(FILE_SIZE);
                 leftChannel[j][i] = Lrw.getChannel();
                 rightChannel[j][i] = Rrw.getChannel();
                 leftChannelSpinLock[j][i] = new AtomicBoolean(false);
@@ -329,6 +332,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
         {
             int  lBry = 0, rBry = 0;
             for (int i = 0; i < BOUNDARYSIZE; i++){
+                blockSize[j][0][i] = (int)leftChannel[j][i].position() >> 3;
+                blockSize[j][1][i] = (int)rightChannel[j][i].position() >> 3;
                 beginOrder[j][0][i] = lBry + 1;
                 lBry += blockSize[j][0][i];
                 beginOrder[j][1][i] = rBry + 1;
@@ -528,16 +533,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 }
             }catch (Exception e){
                 e.printStackTrace();
-            }
-            for(int i = 0; i < BOUNDARYSIZE; i++)
-            {
-                AtomicBoolean atomicBoolean = rightChannelSpinLock[0][i];
-                while (atomicBoolean.compareAndSet(false, true)){}
-                blockSize[0][0][i] += ( threadBlockSize[0][0][i] >> 3);
-                blockSize[0][1][i] += ( threadBlockSize[0][1][i] >> 3);
-                blockSize[1][0][i] += ( threadBlockSize[1][0][i] >> 3);
-                blockSize[1][1][i] += ( threadBlockSize[1][1][i] >> 3);
-                atomicBoolean.set(false);
             }
             latch.countDown();
 
