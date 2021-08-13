@@ -66,8 +66,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
     //实验
     private FileChannel[][] leftChannel = new FileChannel[TABLENUM][BOUNDARYSIZE];
     private FileChannel[][] rightChannel = new FileChannel[TABLENUM][BOUNDARYSIZE];
-    private AtomicBoolean[][] leftChannelSpinLock = new AtomicBoolean[TABLENUM][BOUNDARYSIZE];
-    private AtomicBoolean[][] rightChannelSpinLock = new AtomicBoolean[TABLENUM][BOUNDARYSIZE];
     private  String workDir;
 
     public SimpleAnalyticDB() throws NoSuchFieldException, IllegalAccessException {
@@ -303,8 +301,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 Rrw = new RandomAccessFile(RoutFile, "rw");
                 leftChannel[j][i] = Lrw.getChannel();
                 rightChannel[j][i] = Rrw.getChannel();
-                leftChannelSpinLock[j][i] = new AtomicBoolean(false);
-                rightChannelSpinLock[j][i] = new AtomicBoolean(false);
             }
         }
 
@@ -423,11 +419,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     position = byteBuffer.position();
                                     if (position >= BYTEBUFFERSIZE) {
                                         FileChannel fileChannel = leftChannel[k][leftIndex];
-                                        AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
                                         threadBlockSize[k][0][leftIndex] += BYTEBUFFERSIZE;
                                         byteBuffer.flip();
                                         fileChannel.write(byteBuffer);
-                                        atomicBoolean.set(false);
                                         byteBuffer.clear();
                                     }
                                     val = 0;
@@ -438,11 +432,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     position = byteBuffer.position();
                                     if (position >= BYTEBUFFERSIZE) {
                                         FileChannel fileChannel = rightChannel[k][rightIndex];
-                                        AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
                                         threadBlockSize[k][1][rightIndex] += BYTEBUFFERSIZE;
                                         byteBuffer.flip();
                                         fileChannel.write(byteBuffer);
-                                        atomicBoolean.set(false);
                                         byteBuffer.clear();
                                     }
                                     val = 0;
@@ -471,11 +463,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 position = byteBuffer.position();
                                 if (position >= BYTEBUFFERSIZE) {
                                     FileChannel fileChannel = leftChannel[k][leftIndex];
-                                    AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
                                     threadBlockSize[k][0][leftIndex] += BYTEBUFFERSIZE;
                                     byteBuffer.flip();
                                     fileChannel.write(byteBuffer);
-                                    atomicBoolean.set(false);
                                     byteBuffer.clear();
                                 }
                                 val = 0;
@@ -486,11 +476,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 position = byteBuffer.position();
                                 if (position >= BYTEBUFFERSIZE) {
                                     FileChannel fileChannel = rightChannel[k][rightIndex];
-                                    AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
                                     threadBlockSize[k][1][rightIndex] += BYTEBUFFERSIZE;
                                     byteBuffer.flip();
                                     fileChannel.write(byteBuffer);
-                                    atomicBoolean.set(false);
                                     byteBuffer.clear();
                                 }
                                 val = 0;
@@ -502,26 +490,20 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++) {
                         FileChannel fileChannel = leftChannel[k][i];
-                        AtomicBoolean atomicBoolean = leftChannelSpinLock[k][i];
                         ByteBuffer byteBuffer = leftBufs[i];
                         threadBlockSize[k][0][i] += byteBuffer.position();
                         byteBuffer.flip();
-                        while (atomicBoolean.compareAndSet(false, true)){}
                         fileChannel.write(byteBuffer);
-                        atomicBoolean.set(false);
                         byteBuffer.clear();
 
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++)
                     {
                         FileChannel fileChannel = rightChannel[k][i];
-                        AtomicBoolean atomicBoolean = rightChannelSpinLock[k][i];
                         ByteBuffer byteBuffer = rightBufs[i];
                         threadBlockSize[k][1][i] += byteBuffer.position();
                         byteBuffer.flip();
-                        while (atomicBoolean.compareAndSet(false, true)){}
                         fileChannel.write(byteBuffer);
-                        atomicBoolean.set(false);
                         byteBuffer.clear();
                     }
                 }
