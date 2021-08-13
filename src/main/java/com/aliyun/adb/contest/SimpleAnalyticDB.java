@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+
 public class SimpleAnalyticDB implements AnalyticDB {
 
 //    private static final int BOUNDARYSIZE = 130;
