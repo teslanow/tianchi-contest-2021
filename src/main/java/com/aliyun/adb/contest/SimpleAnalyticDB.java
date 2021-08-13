@@ -13,60 +13,35 @@ import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-
 public class SimpleAnalyticDB implements AnalyticDB {
 
-//    private static final int BOUNDARYSIZE = 130;
-//    private static final int QUANTILE_DATA_SIZE = 32000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
-//    private static final int THREADNUM = 16;
-//    private static final long DATALENGTH = 500000000;
-//    private static final int BYTEBUFFERSIZE = 1024 * 128;
-//    private static final int EACHREADSIZE = 1024 * 1024 * 16;
-//    //private static final int EACHREADSIZE = 1024;
-//    private static final int TABLENUM = 2;
-//    private static final int COLNUM_EACHTABLE = 2;
-//    private static final int SHIFTBITNUM = 56;
-//    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
-
-//    private static final int BOUNDARYSIZE = 130;
-//    private static final int QUANTILE_DATA_SIZE = 800; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
-//    private static final int THREADNUM = 1;
-//    private static final long DATALENGTH = 10000;
-//    private static final int BYTEBUFFERSIZE = 1024 * 128;
-//    private static final int EACHREADSIZE = 1024 ;
-//    //private static final int EACHREADSIZE = 1024;
-//    private static final int TABLENUM = 2;
-//    private static final int COLNUM_EACHTABLE = 2;
-//    private static final int SHIFTBITNUM = 56;
-//    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
-
     //提交需改
-    private static final int BOUNDARYSIZE = 520;
+    private static final int BOUNDARYSIZE = 1040;
     private static final int QUANTILE_DATA_SIZE = 16000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
-    private static final int THREADNUM = 32;
+    private static final int THREADNUM = 20;
     private static final long DATALENGTH = 1000000000;
+    private static final long FILE_SIZE = 1000000;
     private static final int BYTEBUFFERSIZE = 1024 * 64;
     private static final int EACHREADSIZE = 1024 * 1024 * 16;
     private static final int TABLENUM = 2;
     private static final int COLNUM_EACHTABLE = 2;
-    private static final int SHIFTBITNUM = 54;
+    private static final int SHIFTBITNUM = 53;
     private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
 
     private int current_Quantile_threadNUM = 0;
-    private String[][] colName = new String[TABLENUM][COLNUM_EACHTABLE];
-    private String[] tabName = new String[TABLENUM];
-    private String curTableName;
-    private Unsafe unsafe;
+    private final String[][] colName = new String[TABLENUM][COLNUM_EACHTABLE];
+    private final String[] tabName = new String[TABLENUM];
+    private final Unsafe unsafe;
     private final int[][][] blockSize = new int[TABLENUM][COLNUM_EACHTABLE][BOUNDARYSIZE];
     private final int[][][] beginOrder = new int[TABLENUM][COLNUM_EACHTABLE][BOUNDARYSIZE];
-    private long[] quantile_load_base = new long[CONCURRENT_QUANTILE_THREADNUM];
-    private ByteBuffer[] quantile_load_buffer = new ByteBuffer[CONCURRENT_QUANTILE_THREADNUM];
-    private long arrThreadId[] = new long[CONCURRENT_QUANTILE_THREADNUM];
+    private final long[] quantile_load_base = new long[CONCURRENT_QUANTILE_THREADNUM];
+    private final ByteBuffer[] quantile_load_buffer = new ByteBuffer[CONCURRENT_QUANTILE_THREADNUM];
+    private final long[] arrThreadId = new long[CONCURRENT_QUANTILE_THREADNUM];
     private static final CountDownLatch latch = new CountDownLatch(THREADNUM);
 
     //实验
-    private FileChannel[][] leftChannel = new FileChannel[TABLENUM][BOUNDARYSIZE];
-    private FileChannel[][] rightChannel = new FileChannel[TABLENUM][BOUNDARYSIZE];
+    private final FileChannel[][] leftChannel = new FileChannel[TABLENUM][BOUNDARYSIZE];
+    private final FileChannel[][] rightChannel = new FileChannel[TABLENUM][BOUNDARYSIZE];
     private  String workDir;
 
     public SimpleAnalyticDB() throws NoSuchFieldException, IllegalAccessException {
@@ -80,53 +55,53 @@ public class SimpleAnalyticDB implements AnalyticDB {
         long ss = System.currentTimeMillis();
         workDir = workspaceDir;
         //判断工作区是否为空
-//        if(new File(workspaceDir + "/index").exists())
-//        {
-//            for(int i = 1; i < CONCURRENT_QUANTILE_THREADNUM; i++)
-//            {
-//                quantile_load_buffer[i] = ByteBuffer.allocateDirect(QUANTILE_DATA_SIZE);
-//                quantile_load_base[i] = ((DirectBuffer)quantile_load_buffer[i]).address();
-//            }
-//            System.out.println("sencond load");
-//            RandomAccessFile file = new RandomAccessFile(new File(workDir + "/index"), "r");
-//            FileChannel fileChannel = file.getChannel();
-//            byte[] bytes = new byte[(int)fileChannel.size()];
-//            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
-//            byteBuffer.clear();
-//            fileChannel.read(byteBuffer);
-//            byteBuffer.flip();
-//            int curPos = 0;
-//            String[] tmpString = new String[TABLENUM * COLNUM_EACHTABLE + TABLENUM];
-//            for(int pre = 0, index = 0;;)
-//            {
-//                if(bytes[curPos] == 10)
-//                {
-//                    tmpString[index++] = new String(bytes, pre, curPos - pre, "UTF-8");
-//                    if(index >= TABLENUM * COLNUM_EACHTABLE + TABLENUM)
-//                    {
-//                        curPos++;
-//                        break;
-//                    }
-//                    pre = curPos + 1;
-//                }
-//                curPos++;
-//            }
-//            int index_name = 0;
-//            byteBuffer.position(curPos);
-//            for(int i = 0; i < TABLENUM; i++)
-//            {
-//                tabName[i] = tmpString[index_name++];
-//                for(int j = 0; j < COLNUM_EACHTABLE; j++)
-//                {
-//                    colName[i][j] = tmpString[index_name++];
-//                    for( int k = 0; k < BOUNDARYSIZE; k++)
-//                    {
-//                        beginOrder[i][j][k] = byteBuffer.getInt();
-//                    }
-//                }
-//            }
-//            return;
-//        }
+        if(new File(workspaceDir + "/index").exists())
+        {
+            for(int i = 1; i < CONCURRENT_QUANTILE_THREADNUM; i++)
+            {
+                quantile_load_buffer[i] = ByteBuffer.allocateDirect(QUANTILE_DATA_SIZE);
+                quantile_load_base[i] = ((DirectBuffer)quantile_load_buffer[i]).address();
+            }
+            System.out.println("sencond load");
+            RandomAccessFile file = new RandomAccessFile(new File(workDir + "/index"), "r");
+            FileChannel fileChannel = file.getChannel();
+            byte[] bytes = new byte[(int)fileChannel.size()];
+            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
+            byteBuffer.clear();
+            fileChannel.read(byteBuffer);
+            byteBuffer.flip();
+            int curPos = 0;
+            String[] tmpString = new String[TABLENUM * COLNUM_EACHTABLE + TABLENUM];
+            for(int pre = 0, index = 0;;)
+            {
+                if(bytes[curPos] == 10)
+                {
+                    tmpString[index++] = new String(bytes, pre, curPos - pre, "UTF-8");
+                    if(index >= TABLENUM * COLNUM_EACHTABLE + TABLENUM)
+                    {
+                        curPos++;
+                        break;
+                    }
+                    pre = curPos + 1;
+                }
+                curPos++;
+            }
+            int index_name = 0;
+            byteBuffer.position(curPos);
+            for(int i = 0; i < TABLENUM; i++)
+            {
+                tabName[i] = tmpString[index_name++];
+                for(int j = 0; j < COLNUM_EACHTABLE; j++)
+                {
+                    colName[i][j] = tmpString[index_name++];
+                    for( int k = 0; k < BOUNDARYSIZE; k++)
+                    {
+                        beginOrder[i][j][k] = byteBuffer.getInt();
+                    }
+                }
+            }
+            return;
+        }
         File dir = new File(tpchDataFileDir);
         loadStore(dir.listFiles());
         long end = System.currentTimeMillis();
@@ -167,7 +142,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 }
             }
         }
-        //System.out.println("thread " + Thread.currentThread().getId() + " current_threadnum " + current_Quantile_threadNUM + " buffer_id " + buffer_index );
+        System.out.println("thread " + Thread.currentThread().getId() + " current_threadnum " + current_Quantile_threadNUM + " buffer_id " + buffer_index );
         int rank = (int) Math.round(DATALENGTH * percentile);
         int index;
         int flag_table, flag_colum;
@@ -216,8 +191,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //        System.out.println("get size " + (left_size >> 3));
         ans = MyFind.quickFind(unsafe, byteBufferBase ,byteBufferBase + left_size - 8, ((long)rankDiff << 3)).toString();
         long e1 = System.currentTimeMillis();
-//        System.out.println("one quantile time is " + (e1 - s1) + " percentile " + percentile + "rank "+ rank + " index " + index  + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum]);
-        //return "0";
+        System.out.println("one quantile time is " + (e1 - s1) + " percentile " + percentile + "rank "+ rank + " index " + index  + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum] + " " + ans);
+//        return "0";
         return ans;
     }
 
@@ -304,14 +279,13 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 rightChannel[j][i] = Rrw.getChannel();
             }
         }
-
         for(int i = 0; i < THREADNUM; i++)
         {
             new Thread(new ThreadTask(i, readStartEachThread[i], trueSizeOfMmapEachThread[i], allFileChannel)).start();
         }
         latch.await();
 
-        StringBuilder builder= new StringBuilder(workDir + "/index");
+        StringBuilder builder= new StringBuilder(workDir).append("/index");
         FileChannel fileChannel = new RandomAccessFile(new File(builder.toString()), "rw").getChannel();
         for(int i = 0; i < TABLENUM; i++)
         {
@@ -366,21 +340,20 @@ public class SimpleAnalyticDB implements AnalyticDB {
         ByteBuffer directBuffer;
         ByteBuffer[] leftBufs;
         ByteBuffer[] rightBufs;
-        int[][][] threadBlockSize = new int[TABLENUM][COLNUM_EACHTABLE][BOUNDARYSIZE];
         //初始化
         public ThreadTask(int threadNo, long[] readStart ,long[] trueSizeOfMmap, FileChannel[] fileChannel) throws Exception {
             this.threadNo = threadNo;
             this.readStart = readStart;
             this.trueSizeOfMmap = trueSizeOfMmap;
             this.fileChannel = fileChannel;
-            this.directBuffer = ByteBuffer.allocateDirect(EACHREADSIZE);
-            this.leftBufs = new ByteBuffer[BOUNDARYSIZE];
-            this.rightBufs = new ByteBuffer[BOUNDARYSIZE];
-            this.directBufferBase = ((DirectBuffer)directBuffer).address();
         }
 
         @Override
         public void run() {
+            this.leftBufs = new ByteBuffer[BOUNDARYSIZE];
+            this.rightBufs = new ByteBuffer[BOUNDARYSIZE];
+            this.directBuffer = ByteBuffer.allocateDirect(EACHREADSIZE);
+            this.directBufferBase = ((DirectBuffer)directBuffer).address();
             for (int i = 0; i < BOUNDARYSIZE; i++) {
                 leftBufs[i] = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
                 leftBufs[i].order(ByteOrder.LITTLE_ENDIAN);
@@ -390,7 +363,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
             try{
                 for(int k = 0; k < TABLENUM; k++)
                 {
-                    curTableName = tabName[k];
+                    String curTableName = tabName[k];
                     long nowRead = 0, realRead, yuzhi = trueSizeOfMmap[k] - EACHREADSIZE;
                     long curReadStart = readStart[k];
                     while(nowRead < yuzhi) {
@@ -420,7 +393,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     position = byteBuffer.position();
                                     if (position >= BYTEBUFFERSIZE) {
                                         FileChannel fileChannel = leftChannel[k][leftIndex];
-                                        threadBlockSize[k][0][leftIndex] += BYTEBUFFERSIZE;
                                         byteBuffer.flip();
                                         fileChannel.write(byteBuffer);
                                         byteBuffer.clear();
@@ -433,7 +405,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     position = byteBuffer.position();
                                     if (position >= BYTEBUFFERSIZE) {
                                         FileChannel fileChannel = rightChannel[k][rightIndex];
-                                        threadBlockSize[k][1][rightIndex] += BYTEBUFFERSIZE;
                                         byteBuffer.flip();
                                         fileChannel.write(byteBuffer);
                                         byteBuffer.clear();
@@ -442,7 +413,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 }
                             }
                             else {
-                                val = (val << 1) + (val << 3) + (t - 48);
+                                val = (val << 3) + (val << 1) + (t - 48);
                             }
                         }
                     }
@@ -464,7 +435,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 position = byteBuffer.position();
                                 if (position >= BYTEBUFFERSIZE) {
                                     FileChannel fileChannel = leftChannel[k][leftIndex];
-                                    threadBlockSize[k][0][leftIndex] += BYTEBUFFERSIZE;
                                     byteBuffer.flip();
                                     fileChannel.write(byteBuffer);
                                     byteBuffer.clear();
@@ -477,7 +447,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 position = byteBuffer.position();
                                 if (position >= BYTEBUFFERSIZE) {
                                     FileChannel fileChannel = rightChannel[k][rightIndex];
-                                    threadBlockSize[k][1][rightIndex] += BYTEBUFFERSIZE;
                                     byteBuffer.flip();
                                     fileChannel.write(byteBuffer);
                                     byteBuffer.clear();
@@ -486,23 +455,20 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             }
                         }
                         else {
-                            val = (val << 1 ) + (val << 3) + (t - 48);
+                            val = (val << 3) + (val << 1) + (t - 48);
                         }
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++) {
                         FileChannel fileChannel = leftChannel[k][i];
                         ByteBuffer byteBuffer = leftBufs[i];
-                        threadBlockSize[k][0][i] += byteBuffer.position();
                         byteBuffer.flip();
                         fileChannel.write(byteBuffer);
                         byteBuffer.clear();
-
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++)
                     {
                         FileChannel fileChannel = rightChannel[k][i];
                         ByteBuffer byteBuffer = rightBufs[i];
-                        threadBlockSize[k][1][i] += byteBuffer.position();
                         byteBuffer.flip();
                         fileChannel.write(byteBuffer);
                         byteBuffer.clear();
@@ -512,8 +478,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 e.printStackTrace();
             }
             latch.countDown();
-
         }
-
     }
 }
