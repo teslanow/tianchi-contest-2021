@@ -48,7 +48,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     private static final int EACHREADSIZE = 1024 * 1024 * 16;
     private static final int TABLENUM = 2;
     private static final int COLNUM_EACHTABLE = 2;
-    private static final int SHIFTBITNUM = 54;
+    private static final int SHIFTBITNUM = 55;
     private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
 
     private int current_Quantile_threadNUM = 0;
