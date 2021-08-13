@@ -426,7 +426,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                         AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
                                         threadBlockSize[k][0][leftIndex] += BYTEBUFFERSIZE;
                                         byteBuffer.flip();
-                                        while (atomicBoolean.compareAndSet(false, true)){}
+                                        while (!atomicBoolean.compareAndSet(false, true)){}
                                         fileChannel.write(byteBuffer);
                                         atomicBoolean.set(false);
                                         byteBuffer.clear();
@@ -442,7 +442,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                         AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
                                         threadBlockSize[k][1][rightIndex] += BYTEBUFFERSIZE;
                                         byteBuffer.flip();
-                                        while (atomicBoolean.compareAndSet(false, true)){}
+                                        while (!atomicBoolean.compareAndSet(false, true)){}
                                         fileChannel.write(byteBuffer);
                                         atomicBoolean.set(false);
                                         byteBuffer.clear();
@@ -476,7 +476,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
                                     threadBlockSize[k][0][leftIndex] += BYTEBUFFERSIZE;
                                     byteBuffer.flip();
-                                    while (atomicBoolean.compareAndSet(false, true)){}
+                                    while (!atomicBoolean.compareAndSet(false, true)){}
                                     fileChannel.write(byteBuffer);
                                     atomicBoolean.set(false);
                                     byteBuffer.clear();
@@ -492,7 +492,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
                                     threadBlockSize[k][1][rightIndex] += BYTEBUFFERSIZE;
                                     byteBuffer.flip();
-                                    while (atomicBoolean.compareAndSet(false, true)){}
+                                    while (!atomicBoolean.compareAndSet(false, true)){}
                                     fileChannel.write(byteBuffer);
                                     atomicBoolean.set(false);
                                     byteBuffer.clear();
