@@ -40,7 +40,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
 
     //提交需改
-    private static final long FILE_SIZE = 2000000;
     private static final int BOUNDARYSIZE = 520;
     private static final int QUANTILE_DATA_SIZE = 16000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
     private static final int THREADNUM = 32;
@@ -302,8 +301,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 RoutFile = new File(outRDir);
                 Lrw = new RandomAccessFile(LoutFile, "rw");
                 Rrw = new RandomAccessFile(RoutFile, "rw");
-                Lrw.setLength(FILE_SIZE);
-                Rrw.setLength(FILE_SIZE);
                 leftChannel[j][i] = Lrw.getChannel();
                 rightChannel[j][i] = Rrw.getChannel();
                 leftChannelSpinLock[j][i] = new AtomicBoolean(false);
