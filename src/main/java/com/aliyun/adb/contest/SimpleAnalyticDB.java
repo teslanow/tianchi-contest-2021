@@ -375,14 +375,14 @@ public class SimpleAnalyticDB implements AnalyticDB {
             this.readStart = readStart;
             this.trueSizeOfMmap = trueSizeOfMmap;
             this.fileChannel = fileChannel;
-            this.directBuffer = ByteBuffer.allocateDirect(EACHREADSIZE);
-            this.leftBufs = new ByteBuffer[BOUNDARYSIZE];
-            this.rightBufs = new ByteBuffer[BOUNDARYSIZE];
-            this.directBufferBase = ((DirectBuffer)directBuffer).address();
         }
 
         @Override
         public void run() {
+            this.directBuffer = ByteBuffer.allocateDirect(EACHREADSIZE);
+            this.directBufferBase = ((DirectBuffer)directBuffer).address();
+            this.leftBufs = new ByteBuffer[BOUNDARYSIZE];
+            this.rightBufs = new ByteBuffer[BOUNDARYSIZE];
             for (int i = 0; i < BOUNDARYSIZE; i++) {
                 leftBufs[i] = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
                 leftBufs[i].order(ByteOrder.LITTLE_ENDIAN);
