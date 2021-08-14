@@ -92,7 +92,22 @@ public class SimpleAnalyticDB implements AnalyticDB {
             this.quantile_load_buffer[0][i] = ByteBuffer.allocateDirect(QUANTILE_READ_SIZE);
             this.quantile_load_base[0][i] = ((DirectBuffer)quantile_load_buffer[0][i]).address();
         }
-
+        ByteBuffer[] val_buffer = new ByteBuffer[INTERVAL_SMALL_BLOCK];
+        long[] val_buffer_base = new long[INTERVAL_SMALL_BLOCK];
+        for(int j = 0; j < INTERVAL_SMALL_BLOCK; j++)
+        {
+            val_buffer[j] = ByteBuffer.allocateDirect(SMALL_QUANTILE_DATA_SIZE);;
+            val_buffer_base[j] = ((DirectBuffer)val_buffer[j]).address();
+        }
+        findBufferBase[0] = val_buffer_base[0];
+        for(int j = 0; j < EACH_QUANTILE_THREADNUM; j++)
+        {
+            for(int k = 0; k < INTERVAL_SMALL_BLOCK; k++)
+            {
+                int offset = j * SMALL_QUANTILE_DATA_SIZE_OF_EACH_QTHREAD;
+                quantile_data_base[0][j][k] = val_buffer_base[k] + offset;
+            }
+        }
     }
 
     @Override
@@ -112,7 +127,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
             ByteBuffer[] val_buffer = new ByteBuffer[INTERVAL_SMALL_BLOCK];
             long[] val_buffer_base = new long[INTERVAL_SMALL_BLOCK];
-            for(int i = 0; i < CONCURRENT_QUANTILE_THREADNUM; i++)
+            for(int i = 1; i < CONCURRENT_QUANTILE_THREADNUM; i++)
             {
                 for(int j = 0; j < INTERVAL_SMALL_BLOCK; j++)
                 {
