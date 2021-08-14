@@ -5,6 +5,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.*;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
@@ -13,9 +14,9 @@ public class TestSimpleAnalyticDB {
 
     @Test
     public void testCorrectness() throws Exception {
-        File testDataDir = new File("./test_data");
+        File testDataDir = new File("./test_data3");
         File testWorkspaceDir = new File("./target");
-        File testResultsFile = new File("./test_result/results");
+        File testResultsFile = new File("./test_result/results1");
         List<String> ans = new ArrayList<>();
 
         try (BufferedReader resReader = new BufferedReader(new FileReader(testResultsFile))) {
@@ -28,6 +29,7 @@ public class TestSimpleAnalyticDB {
         // ROUND #1
         SimpleAnalyticDB analyticDB1 = new SimpleAnalyticDB();
         analyticDB1.load(testDataDir.getAbsolutePath(), testWorkspaceDir.getAbsolutePath());
+
         testQuery(analyticDB1, ans, 10);
 
         // To simulate exiting
@@ -37,11 +39,11 @@ public class TestSimpleAnalyticDB {
         SimpleAnalyticDB analyticDB2 = new SimpleAnalyticDB();
         analyticDB2.load(testDataDir.getAbsolutePath(), testWorkspaceDir.getAbsolutePath());
 
-        Executor testWorkers = Executors.newFixedThreadPool(8);
+        Executor testWorkers = Executors.newFixedThreadPool(2);
 
-        CompletableFuture[] futures = new CompletableFuture[8];
+        CompletableFuture[] futures = new CompletableFuture[2];
 
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < 2; i++) {
             futures[i] = CompletableFuture.runAsync(() -> testQuery(analyticDB2, ans, 500), testWorkers);
         }
 
@@ -58,6 +60,7 @@ public class TestSimpleAnalyticDB {
                 double percentile = Double.valueOf(resultStr[2]);
                 String answer = resultStr[3];
                 String gotAnswer = analyticDB.quantile(table, column, percentile);
+                //gotAnswer = "0"
                 System.out.println("" + answer.equals(gotAnswer)+ " expected " + answer + " got " + gotAnswer);
                 Assert.assertEquals(answer, gotAnswer);
             }

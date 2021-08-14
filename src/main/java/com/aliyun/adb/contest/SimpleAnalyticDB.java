@@ -27,35 +27,35 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //    private static final int SHIFTBITNUM = 56;
 //    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
 
-    private static final int BOUNDARYSIZE = 130;
-    private static final int QUANTILE_DATA_SIZE = 1600; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
-    private static final int THREADNUM = 1;
-    private static final long DATALENGTH = 10000;
-    private static final int BYTEBUFFERSIZE = 1024 * 128;
-    private static final int EACHREADSIZE = 1024 ;
-    //private static final int EACHREADSIZE = 1024;
-    private static final int TABLENUM = 2;
-    private static final int COLNUM_EACHTABLE = 2;
-    private static final int SHIFTBITNUM = 56;
-    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
-    private static final int QUANTILE_READ_SIZE = 1024 * 1024 * 16;
-    //提交需改
-//    private static final int BOUNDARYSIZE = 520;
-//    private static final int THREADNUM = 32;
-//    private static final long DATALENGTH = 1000000000;
-//    private static final int BYTEBUFFERSIZE = 1024 * 64;
-//    private static final int EACHREADSIZE = 1024 * 1024 * 16;
-//    private static final int QUANTILE_READ_SIZE = 1024 * 1024 * 16;
+//    private static final int BOUNDARYSIZE = 130;
+//    private static final int QUANTILE_DATA_SIZE = 1600; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
+//    private static final int THREADNUM = 1;
+//    private static final long DATALENGTH = 10000;
+//    private static final int BYTEBUFFERSIZE = 1024 * 128;
+//    private static final int EACHREADSIZE = 1024 ;
+//    //private static final int EACHREADSIZE = 1024;
 //    private static final int TABLENUM = 2;
 //    private static final int COLNUM_EACHTABLE = 2;
-//    private static final int SHIFTBITNUM = 54;
+//    private static final int SHIFTBITNUM = 56;
 //    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
-//    private static final int QUANTILE_DATA_SIZE = 16000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
+//    private static final int QUANTILE_READ_SIZE = 1024 * 1024 * 16;
+    //提交需改
+    private static final int BOUNDARYSIZE = 520;
+    private static final int THREADNUM = 32;
+    private static final long DATALENGTH = 100000000;
+    private static final int BYTEBUFFERSIZE = 1024 * 64;
+    private static final int EACHREADSIZE = 1024 * 1024 * 16;
+    private static final int QUANTILE_READ_SIZE = 1024 * 1024 * 16;
+    private static final int TABLENUM = 2;
+    private static final int COLNUM_EACHTABLE = 2;
+    private static final int SHIFTBITNUM = 54;
+    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
+    private static final int QUANTILE_DATA_SIZE = 2000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
 
     private static final long ALIGN_MASK = ~(0x7);
     private static final int SMALL_SHIFTBITNUM = 53;
     private static final int SMALL_MASK = ((1 << (SHIFTBITNUM - SMALL_SHIFTBITNUM)) - 1);
-    private static final int EACH_QUANTILE_THREADNUM = 4;
+    private static final int EACH_QUANTILE_THREADNUM = 8;
     private static final int INTERVAL_SMALL_BLOCK = (1 << (SHIFTBITNUM - SMALL_SHIFTBITNUM));
     private static final int SMALL_QUANTILE_DATA_SIZE = QUANTILE_DATA_SIZE / INTERVAL_SMALL_BLOCK; //每次查询的每个小块的总的DATASIZE
     private static final int SMALL_QUANTILE_DATA_SIZE_OF_EACH_QTHREAD = SMALL_QUANTILE_DATA_SIZE / EACH_QUANTILE_THREADNUM; //每个查询线程每次查询的每个小块的总的DATASIZE
@@ -203,7 +203,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 for(int i = 0; i < CONCURRENT_QUANTILE_THREADNUM; i++)
                 {
                     if(arrThreadId[i] == Thread.currentThread().getId())
+                    {
+                        buffer_index = i;
                         break;
+                    }
+
                     else if(arrThreadId[i] == 0)
                     {
                         buffer_index = i;
@@ -226,6 +230,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
         }
         //System.out.println("thread " + Thread.currentThread().getId() + " current_threadnum " + current_Quantile_threadNUM + " buffer_id " + buffer_index );
+        //System.out.println("Buffer index " + buffer_index);
         int rank = (int) Math.round(DATALENGTH * percentile);
         int index;
         int flag_table, flag_colum;
@@ -265,6 +270,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         String fileName = builder.append("/").append(table).append("-").append(column).append("-").append(index).toString();
         FileInputStream inFile = new FileInputStream(fileName);
         FileChannel channel = inFile.getChannel();
+        //System.out.println("buffer index before " + buffer_index + " " + Arrays.toString(readBufferBase) + " " + Arrays.toString(dataBufferBase[0]) + " " + Arrays.toString(dataSize_ofSmallBlock[0]) + " " + Thread.currentThread().getName() + " ID " + Thread.currentThread().getId());
         int left_size = (int)channel.size();
 
         long each_read_size = (left_size / EACH_QUANTILE_THREADNUM) & (ALIGN_MASK); //保证为8倍数
@@ -286,6 +292,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
 
         }
+        //System.out.println("buffer index " + buffer_index + " " + Arrays.toString(readBufferBase) + " " + Arrays.toString(dataBufferBase[0]) + " " + Arrays.toString(dataSize_ofSmallBlock[0]) );
         int[] eachSmallBlockSize = new int[INTERVAL_SMALL_BLOCK]; //该次查询中，每个小块总的数目
         for(int i = 0; i < INTERVAL_SMALL_BLOCK; i++)
         {
@@ -314,8 +321,21 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //                System.out.println(unsafe.getLong(null, dataBufferBase[i][smallBlockIndex] + j * 8));
 //            }
 //        }
+        for(int i = 0, readIndex = (index << 1) + smallBlockIndex; i < EACH_QUANTILE_THREADNUM; i++)
+        {
+            for(int j = 0; j < dataSize_ofSmallBlock[i][smallBlockIndex]; j++)
+            {
+                if(unsafe.getLong(null, dataBufferBase[i][smallBlockIndex] + j * 8) >> SMALL_SHIFTBITNUM != readIndex)
+                {
+                    System.out.println("here not correct");
+                    return "0";
+                }
+            }
+        }
         for(int i = 0; i < EACH_QUANTILE_THREADNUM; i++)
         {
+            if(copyBase + (dataSize_ofSmallBlock[i][smallBlockIndex] << 3) >= byteBufferBase + SMALL_QUANTILE_DATA_SIZE)
+                System.out.println("error 320 line");
             unsafe.copyMemory(null, dataBufferBase[i][smallBlockIndex], null, copyBase, (dataSize_ofSmallBlock[i][smallBlockIndex] << 3) );
             copyBase += (dataSize_ofSmallBlock[i][smallBlockIndex] << 3);
         }
@@ -324,10 +344,19 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //        {
 //            System.out.println(unsafe.getLong(byteBufferBase + 8 * i));
 //        }
+        for(int i = 0, readIndex = (index << 1) + smallBlockIndex ; i < eachSmallBlockSize[smallBlockIndex]; i++)
+        {
+            if(unsafe.getLong(null, byteBufferBase + i * 8) >> SMALL_SHIFTBITNUM != readIndex)
+            {
+                System.out.println("Not correct");
+                return "0";
+            }
+        }
         ans = MyFind.quickFind(unsafe, byteBufferBase ,byteBufferBase + (eachSmallBlockSize[smallBlockIndex] << 3) - 8, ((long)rankDiff << 3)).toString();
+        //System.out.println("buffer index " + buffer_index + " ans " + ans);
         long e1 = System.currentTimeMillis();
 //        System.out.println("one quantile time is " + (e1 - s1) + " percentile " + percentile + "rank "+ rank + " index " + index  + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum]);
-//        return "0";
+        //return "0";
         return ans;
     }
 
