@@ -51,8 +51,8 @@ public class TestSimpleAnalyticDB {
     private void testQuery(AnalyticDB analyticDB, List<String> ans, int testCount) {
         try {
             for (int i = 0; i < testCount; i++) {
-                int p = ThreadLocalRandom.current().nextInt(ans.size());
-                String resultStr[] = ans.get(p).split(" ");
+                //int p = ThreadLocalRandom.current().nextInt(ans.size());
+                String resultStr[] = ans.get(i).split(" ");
                 String table = resultStr[0];
                 String column = resultStr[1];
                 double percentile = Double.valueOf(resultStr[2]);
