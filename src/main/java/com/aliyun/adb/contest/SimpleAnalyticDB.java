@@ -369,7 +369,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
         ByteBuffer directBuffer;
         ByteBuffer[] leftBufs;
         ByteBuffer[] rightBufs;
-        int[][][] threadBlockSize = new int[TABLENUM][COLNUM_EACHTABLE][BOUNDARYSIZE];
         //初始化
         public ThreadTask(int threadNo, long[] readStart ,long[] trueSizeOfMmap, FileChannel[] fileChannel) throws Exception {
             this.threadNo = threadNo;
@@ -424,7 +423,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     if (position >= BYTEBUFFERSIZE) {
                                         FileChannel fileChannel = leftChannel[k][leftIndex];
                                         AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
-                                        threadBlockSize[k][0][leftIndex] += BYTEBUFFERSIZE;
                                         byteBuffer.flip();
                                         while (atomicBoolean.compareAndSet(false, true)){}
                                         fileChannel.write(byteBuffer);
@@ -440,7 +438,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     if (position >= BYTEBUFFERSIZE) {
                                         FileChannel fileChannel = rightChannel[k][rightIndex];
                                         AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
-                                        threadBlockSize[k][1][rightIndex] += BYTEBUFFERSIZE;
                                         byteBuffer.flip();
                                         while (atomicBoolean.compareAndSet(false, true)){}
                                         fileChannel.write(byteBuffer);
@@ -474,7 +471,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 if (position >= BYTEBUFFERSIZE) {
                                     FileChannel fileChannel = leftChannel[k][leftIndex];
                                     AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
-                                    threadBlockSize[k][0][leftIndex] += BYTEBUFFERSIZE;
                                     byteBuffer.flip();
                                     while (atomicBoolean.compareAndSet(false, true)){}
                                     fileChannel.write(byteBuffer);
@@ -490,7 +486,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 if (position >= BYTEBUFFERSIZE) {
                                     FileChannel fileChannel = rightChannel[k][rightIndex];
                                     AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
-                                    threadBlockSize[k][1][rightIndex] += BYTEBUFFERSIZE;
                                     byteBuffer.flip();
                                     while (atomicBoolean.compareAndSet(false, true)){}
                                     fileChannel.write(byteBuffer);
@@ -508,7 +503,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         FileChannel fileChannel = leftChannel[k][i];
                         AtomicBoolean atomicBoolean = leftChannelSpinLock[k][i];
                         ByteBuffer byteBuffer = leftBufs[i];
-                        threadBlockSize[k][0][i] += byteBuffer.position();
                         byteBuffer.flip();
                         while (atomicBoolean.compareAndSet(false, true)){}
                         fileChannel.write(byteBuffer);
@@ -521,7 +515,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         FileChannel fileChannel = rightChannel[k][i];
                         AtomicBoolean atomicBoolean = rightChannelSpinLock[k][i];
                         ByteBuffer byteBuffer = rightBufs[i];
-                        threadBlockSize[k][1][i] += byteBuffer.position();
                         byteBuffer.flip();
                         while (atomicBoolean.compareAndSet(false, true)){}
                         fileChannel.write(byteBuffer);
