@@ -34,7 +34,9 @@ public class TestSimpleAnalyticDB {
         for(int i = 0; i < 1000; i++)
         {
             String aa = analyticDB1.quantile("lineitem","HELL0_ORDERKEY", base );
-            bufferedWriter.write("lineitem HELL0_ORDERKEY " + new DecimalFormat("0.000").format(base) + " " + ans + "\n");
+            System.out.println("lineitem HELL0_ORDERKEY " + new DecimalFormat("0.000").format(base) + " " + aa + "\n");
+            bufferedWriter.write("lineitem HELL0_ORDERKEY " + new DecimalFormat("0.000").format(base) + " " + aa + "\n");
+            base += 0.001;
         }
         bufferedWriter.flush();
         bufferedWriter.close();
