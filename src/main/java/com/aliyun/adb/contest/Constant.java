@@ -11,34 +11,31 @@ public class Constant {
     public static final int COLNUM_EACHTABLE = 2;
     public static final int SHIFTBITNUM = 54;
     public static final int CONCURRENT_QUANTILE_THREADNUM = 8;
-    public static final int AVALIABLE_BUFFERNUM = 10;
-    public static final int PRODUCER_NUM = 16;
-    public static final int ALLREADEREND = (1 << PRODUCER_NUM) - 1;
 
 
 
-//    private static final int Constant.BOUNDARYSIZE = 130;
-//    private static final int Constant.QUANTILE_DATA_SIZE = 32000000; //每次查询的data量，基本等于DATALENGTH / Constant.BOUNDARYSIZE * 8
-//    private static final int Constant.THREADNUM = 16;
-//    private static final long Constant.DATALENGTH = 500000000;
-//    private static final int Constant.BYTEBUFFERSIZE = 1024 * 128;
-//    private static final int Constant.EACHREADSIZE = 1024 * 1024 * 16;
-//    //private static final int Constant.EACHREADSIZE = 1024;
-//    private static final int Constant.TABLENUM = 2;
-//    private static final int Constant.COLNUM_EACHTABLE = 2;
-//    private static final int Constant.SHIFTBITNUM = 56;
-//    private static final int Constant.CONCURRENT_QUANTILE_THREADNUM = 8;
+//    public static final int Constant.BOUNDARYSIZE = 130;
+//    public static final int Constant.QUANTILE_DATA_SIZE = 32000000; //每次查询的data量，基本等于DATALENGTH / Constant.BOUNDARYSIZE * 8
+//    public static final int Constant.THREADNUM = 16;
+//    public static final long Constant.DATALENGTH = 500000000;
+//    public static final int Constant.BYTEBUFFERSIZE = 1024 * 128;
+//    public static final int Constant.EACHREADSIZE = 1024 * 1024 * 16;
+//    //public static final int Constant.EACHREADSIZE = 1024;
+//    public static final int Constant.TABLENUM = 2;
+//    public static final int Constant.COLNUM_EACHTABLE = 2;
+//    public static final int Constant.SHIFTBITNUM = 56;
+//    public static final int Constant.CONCURRENT_QUANTILE_THREADNUM = 8;
 
-//    private static final int Constant.BOUNDARYSIZE = 130;
-//    private static final int Constant.QUANTILE_DATA_SIZE = 800; //每次查询的data量，基本等于DATALENGTH / Constant.BOUNDARYSIZE * 8
-//    private static final int Constant.THREADNUM = 1;
-//    private static final long Constant.DATALENGTH = 10000;
-//    private static final int Constant.BYTEBUFFERSIZE = 1024 * 128;
-//    private static final int Constant.EACHREADSIZE = 1024 ;
-//    //private static final int Constant.EACHREADSIZE = 1024;
-//    private static final int Constant.TABLENUM = 2;
-//    private static final int Constant.COLNUM_EACHTABLE = 2;
-//    private static final int Constant.SHIFTBITNUM = 56;
-//    private static final int Constant.CONCURRENT_QUANTILE_THREADNUM = 8;
+//    public static final int Constant.BOUNDARYSIZE = 130;
+//    public static final int Constant.QUANTILE_DATA_SIZE = 800; //每次查询的data量，基本等于DATALENGTH / Constant.BOUNDARYSIZE * 8
+//    public static final int Constant.THREADNUM = 1;
+//    public static final long Constant.DATALENGTH = 10000;
+//    public static final int Constant.BYTEBUFFERSIZE = 1024 * 128;
+//    public static final int Constant.EACHREADSIZE = 1024 ;
+//    //public static final int Constant.EACHREADSIZE = 1024;
+//    public static final int Constant.TABLENUM = 2;
+//    public static final int Constant.COLNUM_EACHTABLE = 2;
+//    public static final int Constant.SHIFTBITNUM = 56;
+//    public static final int Constant.CONCURRENT_QUANTILE_THREADNUM = 8;
 
 }
