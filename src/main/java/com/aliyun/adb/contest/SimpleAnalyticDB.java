@@ -383,8 +383,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
         @Override
         public void run() {
-            FileChannel[] curLeftChannel, curRightChannel;
-            AtomicBoolean[] curLeftSpinLock, curRightSpinLock;
             for (int i = 0; i < BOUNDARYSIZE; i++) {
                 leftBufs[i] = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
                 leftBufs[i].order(ByteOrder.LITTLE_ENDIAN);
@@ -394,10 +392,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
             try{
                 for(int k = 0; k < TABLENUM; k++)
                 {
-                    curLeftChannel = leftChannel[k];
-                    curRightChannel = rightChannel[k];
-                    curLeftSpinLock = leftChannelSpinLock[k];
-                    curRightSpinLock = leftChannelSpinLock[k];
                     curTableName = tabName[k];
                     long nowRead = 0, realRead, yuzhi = trueSizeOfMmap[k] - EACHREADSIZE;
                     long curReadStart = readStart[k];
@@ -425,10 +419,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     int leftIndex = (int)(val >> SHIFTBITNUM);
                                     ByteBuffer byteBuffer = leftBufs[leftIndex];
                                     byteBuffer.putLong(val);
-                                    position = byteBuffer.position();
-                                    if (position >= BYTEBUFFERSIZE) {
-                                        FileChannel fileChannel = curLeftChannel[leftIndex];
-                                        AtomicBoolean atomicBoolean = curLeftSpinLock[leftIndex];
+                                    if (byteBuffer.position() == BYTEBUFFERSIZE) {
+                                        FileChannel fileChannel = leftChannel[k][leftIndex];
+                                        AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
                                         byteBuffer.flip();
                                         while (atomicBoolean.compareAndSet(false, true)){}
                                         fileChannel.write(byteBuffer);
@@ -440,10 +433,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     int rightIndex = (int)(val >> SHIFTBITNUM);
                                     ByteBuffer byteBuffer = rightBufs[rightIndex];
                                     byteBuffer.putLong(val);
-                                    position = byteBuffer.position();
-                                    if (position >= BYTEBUFFERSIZE) {
-                                        FileChannel fileChannel = curRightChannel[rightIndex];
-                                        AtomicBoolean atomicBoolean = curRightSpinLock[rightIndex];
+                                    if (byteBuffer.position() == BYTEBUFFERSIZE) {
+                                        FileChannel fileChannel = rightChannel[k][rightIndex];
+                                        AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
                                         byteBuffer.flip();
                                         while (atomicBoolean.compareAndSet(false, true)){}
                                         fileChannel.write(byteBuffer);
@@ -473,10 +465,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 int leftIndex = (int)(val >> SHIFTBITNUM);
                                 ByteBuffer byteBuffer = leftBufs[leftIndex];
                                 byteBuffer.putLong(val);
-                                position = byteBuffer.position();
-                                if (position >= BYTEBUFFERSIZE) {
-                                    FileChannel fileChannel = curLeftChannel[leftIndex];
-                                    AtomicBoolean atomicBoolean = curLeftSpinLock[leftIndex];
+                                if (byteBuffer.position() == BYTEBUFFERSIZE) {
+                                    FileChannel fileChannel = leftChannel[k][leftIndex];
+                                    AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
                                     byteBuffer.flip();
                                     while (atomicBoolean.compareAndSet(false, true)){}
                                     fileChannel.write(byteBuffer);
@@ -488,10 +479,9 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 int rightIndex = (int)(val >> SHIFTBITNUM);
                                 ByteBuffer byteBuffer = rightBufs[rightIndex];
                                 byteBuffer.putLong(val);
-                                position = byteBuffer.position();
-                                if (position >= BYTEBUFFERSIZE) {
-                                    FileChannel fileChannel = curRightChannel[rightIndex];
-                                    AtomicBoolean atomicBoolean = curRightSpinLock[rightIndex];
+                                if (position == BYTEBUFFERSIZE) {
+                                    FileChannel fileChannel = rightChannel[k][rightIndex];
+                                    AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
                                     byteBuffer.flip();
                                     while (atomicBoolean.compareAndSet(false, true)){}
                                     fileChannel.write(byteBuffer);
@@ -506,8 +496,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         }
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++) {
-                        FileChannel fileChannel = curLeftChannel[i];
-                        AtomicBoolean atomicBoolean = curLeftSpinLock[i];
+                        FileChannel fileChannel = leftChannel[k][i];
+                        AtomicBoolean atomicBoolean = leftChannelSpinLock[k][i];
                         ByteBuffer byteBuffer = leftBufs[i];
                         byteBuffer.flip();
                         while (atomicBoolean.compareAndSet(false, true)){}
@@ -518,8 +508,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++)
                     {
-                        FileChannel fileChannel = curRightChannel[i];
-                        AtomicBoolean atomicBoolean = curRightSpinLock[i];
+                        FileChannel fileChannel = rightChannel[k][i];
+                        AtomicBoolean atomicBoolean = rightChannelSpinLock[k][i];
                         ByteBuffer byteBuffer = rightBufs[i];
                         byteBuffer.flip();
                         while (atomicBoolean.compareAndSet(false, true)){}
