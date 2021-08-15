@@ -510,19 +510,24 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
         @Override
         public void run() {
+            long s3 = System.currentTimeMillis();
             long leftSize = readSize;
             long[] eachBlockBufferCurPos = new long[eachBlockBufferStart.length];
             for(int i = 0; i < eachBlockBufferStart.length; i++)
             {
                 eachBlockBufferCurPos[i] = eachBlockBufferStart[i];
             }
+            long readTime = 0;
             while (leftSize > 0)
             {
                 long curReadSize = Math.min(leftSize, QUANTILE_READ_SIZE);
                 leftSize -= curReadSize;
                 readBuffer.clear();
                 try {
+                    long s1 = System.currentTimeMillis();
                     readChannel.read(readBuffer, readStart);
+                    long s2 = System.currentTimeMillis();
+                    readTime += (s2 - s1);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -549,6 +554,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
             } catch (BrokenBarrierException e) {
                 e.printStackTrace();
             }
+            long s4 = System.currentTimeMillis();
+            System.out.println("total " + (s4 - s3) + " read time " + readTime);
         }
     }
     class ThreadTask implements Runnable {
