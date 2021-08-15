@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class SimpleAnalyticDB implements AnalyticDB {
 
@@ -84,7 +85,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     private AtomicBoolean[][] rightChannelSpinLock = new AtomicBoolean[TABLENUM][BOUNDARYSIZE];
     private  String workDir;
     private static ThreadPoolExecutor poolExecutor = new ThreadPoolExecutor(32, 32, 1000, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>());
-
+    private AtomicInteger queryTimes = new AtomicInteger();
     public SimpleAnalyticDB() throws NoSuchFieldException, IllegalAccessException {
         this.unsafe = GetUnsafe.getUnsafe();
     }
@@ -176,6 +177,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     }
                 }
             }
+            return;
         }
         else
         {
@@ -270,6 +272,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         long cur_read_start = 0;
         long cur_read_size = each_read_size;
         CyclicBarrier barrier = new CyclicBarrier(EACH_QUANTILE_THREADNUM);
+        long ss1 = System.currentTimeMillis();
         for(int i = 0; i < EACH_QUANTILE_THREADNUM; i++)
         {
             if(i == EACH_QUANTILE_THREADNUM - 1)
@@ -285,6 +288,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
 
         }
+        long ss2 = System.currentTimeMillis();
+        long time1 = (ss2 - ss1);
         //System.out.println("buffer index " + buffer_index + " " + Arrays.toString(readBufferBase) + " " + Arrays.toString(dataBufferBase[0]) + " " + Arrays.toString(dataSize_ofSmallBlock[0]) );
         int[] eachSmallBlockSize = new int[INTERVAL_SMALL_BLOCK]; //该次查询中，每个小块总的数目
         for(int i = 0; i < INTERVAL_SMALL_BLOCK; i++)
@@ -306,17 +311,42 @@ public class SimpleAnalyticDB implements AnalyticDB {
         }
         long byteBufferBase = findBufferBase[buffer_index];
         long copyBase = byteBufferBase;
+//        System.out.println("************");
+//        for(int i = 0; i < EACH_QUANTILE_THREADNUM; i++)
+//        {
+//            dataBuffer[i][smallBlockIndex].flip();
+//            for(int j = 0; j < dataSize_ofSmallBlock[i][smallBlockIndex]; j++)
+//            {
+//
+//                System.out.println(dataBuffer[i][smallBlockIndex].getLong());
+//                //System.out.println(unsafe.getLong(null, dataBufferBase[i][smallBlockIndex] + j * 8));
+//            }
+//        }
+        ss1 = System.currentTimeMillis();
         for(int i = 0; i < EACH_QUANTILE_THREADNUM; i++)
         {
             unsafe.copyMemory(null, dataBufferBase[i][smallBlockIndex], null, copyBase, (dataSize_ofSmallBlock[i][smallBlockIndex] << 3) );
             copyBase += (dataSize_ofSmallBlock[i][smallBlockIndex] << 3);
         }
+        ss2 = System.currentTimeMillis();
+        long time2 = (ss2 - ss1);
+//        System.out.println("************");
+//        for(int i = 0; i < eachSmallBlockSize[smallBlockIndex]; i++)
+//        {
+//            System.out.println(unsafe.getLong(byteBufferBase + 8 * i));
+//        }
+        ss1 = System.currentTimeMillis();
         ans = MyFind.quickFind(unsafe, byteBufferBase ,byteBufferBase + (eachSmallBlockSize[smallBlockIndex] << 3) - 8, ((long)rankDiff << 3)).toString();
+        ss2 = System.currentTimeMillis();
+        long time3 = (ss2 - ss1);
         //System.out.println("buffer index " + buffer_index + " ans " + ans);
         long e1 = System.currentTimeMillis();
-        System.out.println("one quantile time is " + (e1 - s1) + " percentile " + percentile + "rank "+ rank + " index " + index  + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum]);
+        System.out.println("one quantile time is " + (e1 - s1) + " " + time1 + " " + time2 + " " + time3);
         //return "0";
-        return ans;
+        if(queryTimes.addAndGet(1) > 400)
+            return "0";
+        else
+            return ans;
     }
 
     private void loadStore(File[] dataFileList) throws Exception {
