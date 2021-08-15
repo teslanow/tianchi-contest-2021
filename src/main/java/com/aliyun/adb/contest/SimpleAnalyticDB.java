@@ -446,8 +446,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
         }
         System.out.println();
-        System.out.println("table 0 " + ( beginOrder[0][0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[0][1][BOUNDARYSIZE - 1] - 1) );
-        System.out.println("table 1 " + ( beginOrder[1][0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[1][1][BOUNDARYSIZE - 1] - 1) );
+        //System.out.println("table 0 " + ( beginOrder[0][0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[0][1][BOUNDARYSIZE - 1] - 1) );
+        //System.out.println("table 1 " + ( beginOrder[1][0][BOUNDARYSIZE - 1] - 1 )  + " " + ( beginOrder[1][1][BOUNDARYSIZE - 1] - 1) );
     }
 
     class QuantileTask implements Runnable
@@ -471,7 +471,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
         @Override
         public void run() {
-            long s3 = System.currentTimeMillis();
             long[] eachBlockBufferCurPos = new long[eachBlockBufferStart.length];
             for(int i = 0; i < eachBlockBufferStart.length; i++)
             {
@@ -497,8 +496,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
             } catch (BrokenBarrierException e) {
                 e.printStackTrace();
             }
-            long s4 = System.currentTimeMillis();
-            System.out.println("total " + (s4 - s3));
         }
     }
     class ThreadTask implements Runnable {
