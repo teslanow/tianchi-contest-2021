@@ -42,7 +42,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     //提交需改
     private static final int BOUNDARYSIZE = 520;
     private static final int THREADNUM = 32;
-    private static final long DATALENGTH = 300000000;
+    private static final long DATALENGTH = 1000000000;
     private static final int BYTEBUFFERSIZE = 1024 * 64;
     private static final int EACHREADSIZE = 1024 * 1024 * 16;
     private static final int QUANTILE_READ_SIZE = 1024 * 1024 * 16;
@@ -50,7 +50,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     private static final int COLNUM_EACHTABLE = 2;
     private static final int SHIFTBITNUM = 54;
     private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
-    private static final long QUANTILE_DATA_SIZE = 6000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
+    private static final long QUANTILE_DATA_SIZE = 16000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
 
     private static final long ALIGN_MASK = ~(0x7);
     private static final int SMALL_SHIFTBITNUM = 53;
@@ -137,46 +137,46 @@ public class SimpleAnalyticDB implements AnalyticDB {
         //判断工作区是否为空
         if(new File(workspaceDir + "/index").exists())
         {
-            initForAllQThread();
-            System.out.println("sencond load");
-            RandomAccessFile file = new RandomAccessFile(new File(workDir + "/index"), "r");
-            FileChannel fileChannel = file.getChannel();
-            byte[] bytes = new byte[(int)fileChannel.size()];
-            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
-            byteBuffer.clear();
-            fileChannel.read(byteBuffer);
-            byteBuffer.flip();
-            int curPos = 0;
-            String[] tmpString = new String[TABLENUM * COLNUM_EACHTABLE + TABLENUM];
-            for(int pre = 0, index = 0;;)
-            {
-                if(bytes[curPos] == 10)
-                {
-                    tmpString[index++] = new String(bytes, pre, curPos - pre, "UTF-8");
-                    if(index >= TABLENUM * COLNUM_EACHTABLE + TABLENUM)
-                    {
-                        curPos++;
-                        break;
-                    }
-                    pre = curPos + 1;
-                }
-                curPos++;
-            }
-            int index_name = 0;
-            byteBuffer.position(curPos);
-            for(int i = 0; i < TABLENUM; i++)
-            {
-                tabName[i] = tmpString[index_name++];
-                for(int j = 0; j < COLNUM_EACHTABLE; j++)
-                {
-                    colName[i][j] = tmpString[index_name++];
-                    for( int k = 0; k < BOUNDARYSIZE; k++)
-                    {
-                        beginOrder[i][j][k] = byteBuffer.getInt();
-                    }
-                }
-            }
             return;
+//            initForAllQThread();
+//            System.out.println("sencond load");
+//            RandomAccessFile file = new RandomAccessFile(new File(workDir + "/index"), "r");
+//            FileChannel fileChannel = file.getChannel();
+//            byte[] bytes = new byte[(int)fileChannel.size()];
+//            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
+//            byteBuffer.clear();
+//            fileChannel.read(byteBuffer);
+//            byteBuffer.flip();
+//            int curPos = 0;
+//            String[] tmpString = new String[TABLENUM * COLNUM_EACHTABLE + TABLENUM];
+//            for(int pre = 0, index = 0;;)
+//            {
+//                if(bytes[curPos] == 10)
+//                {
+//                    tmpString[index++] = new String(bytes, pre, curPos - pre, "UTF-8");
+//                    if(index >= TABLENUM * COLNUM_EACHTABLE + TABLENUM)
+//                    {
+//                        curPos++;
+//                        break;
+//                    }
+//                    pre = curPos + 1;
+//                }
+//                curPos++;
+//            }
+//            int index_name = 0;
+//            byteBuffer.position(curPos);
+//            for(int i = 0; i < TABLENUM; i++)
+//            {
+//                tabName[i] = tmpString[index_name++];
+//                for(int j = 0; j < COLNUM_EACHTABLE; j++)
+//                {
+//                    colName[i][j] = tmpString[index_name++];
+//                    for( int k = 0; k < BOUNDARYSIZE; k++)
+//                    {
+//                        beginOrder[i][j][k] = byteBuffer.getInt();
+//                    }
+//                }
+//            }
         }
         else
         {
@@ -307,31 +307,15 @@ public class SimpleAnalyticDB implements AnalyticDB {
         }
         long byteBufferBase = findBufferBase[buffer_index];
         long copyBase = byteBufferBase;
-//        System.out.println("************");
-//        for(int i = 0; i < EACH_QUANTILE_THREADNUM; i++)
-//        {
-//            dataBuffer[i][smallBlockIndex].flip();
-//            for(int j = 0; j < dataSize_ofSmallBlock[i][smallBlockIndex]; j++)
-//            {
-//
-//                System.out.println(dataBuffer[i][smallBlockIndex].getLong());
-//                //System.out.println(unsafe.getLong(null, dataBufferBase[i][smallBlockIndex] + j * 8));
-//            }
-//        }
         for(int i = 0; i < EACH_QUANTILE_THREADNUM; i++)
         {
             unsafe.copyMemory(null, dataBufferBase[i][smallBlockIndex], null, copyBase, (dataSize_ofSmallBlock[i][smallBlockIndex] << 3) );
             copyBase += (dataSize_ofSmallBlock[i][smallBlockIndex] << 3);
         }
-//        System.out.println("************");
-//        for(int i = 0; i < eachSmallBlockSize[smallBlockIndex]; i++)
-//        {
-//            System.out.println(unsafe.getLong(byteBufferBase + 8 * i));
-//        }
         ans = MyFind.quickFind(unsafe, byteBufferBase ,byteBufferBase + (eachSmallBlockSize[smallBlockIndex] << 3) - 8, ((long)rankDiff << 3)).toString();
         //System.out.println("buffer index " + buffer_index + " ans " + ans);
         long e1 = System.currentTimeMillis();
-//        System.out.println("one quantile time is " + (e1 - s1) + " percentile " + percentile + "rank "+ rank + " index " + index  + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum]);
+        System.out.println("one quantile time is " + (e1 - s1) + " percentile " + percentile + "rank "+ rank + " index " + index  + " table " + tabName[flag_table] + " column " + colName[flag_table][flag_colum]);
         //return "0";
         return ans;
     }
