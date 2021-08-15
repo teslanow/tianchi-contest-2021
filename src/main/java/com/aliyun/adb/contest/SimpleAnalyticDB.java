@@ -43,8 +43,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
     //提交需改
     private static final int BOUNDARYSIZE = 520;
     private static final int THREADNUM = 32;
-    //private static final long DATALENGTH = 1000000000;
-    private static final long DATALENGTH = 300000000;
+    private static final long DATALENGTH = 1000000000;
+    //private static final long DATALENGTH = 300000000;
     private static final int BYTEBUFFERSIZE = 1024 * 64;
     private static final int EACHREADSIZE = 1024 * 1024 * 16;
 
@@ -52,8 +52,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
     private static final int COLNUM_EACHTABLE = 2;
     private static final int SHIFTBITNUM = 54;
     private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
-    //private static final long QUANTILE_DATA_SIZE = 16000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
-    private static final long QUANTILE_DATA_SIZE = 6000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
+    private static final long QUANTILE_DATA_SIZE = 16000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
+    //private static final long QUANTILE_DATA_SIZE = 6000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
     private static final long ALIGN_MASK = ~(0x7);
     private static final int SMALL_SHIFTBITNUM = 53;
     private static final int SMALL_MASK = ((1 << (SHIFTBITNUM - SMALL_SHIFTBITNUM)) - 1);
