@@ -43,16 +43,17 @@ public class SimpleAnalyticDB implements AnalyticDB {
     //提交需改
     private static final int BOUNDARYSIZE = 520;
     private static final int THREADNUM = 32;
-    private static final long DATALENGTH = 1000000000;
+    //private static final long DATALENGTH = 1000000000;
+    private static final long DATALENGTH = 300000000;
     private static final int BYTEBUFFERSIZE = 1024 * 64;
     private static final int EACHREADSIZE = 1024 * 1024 * 16;
-    private static final int QUANTILE_READ_SIZE = 1024 * 1024 * 16;
+
     private static final int TABLENUM = 2;
     private static final int COLNUM_EACHTABLE = 2;
     private static final int SHIFTBITNUM = 54;
     private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
-    private static final long QUANTILE_DATA_SIZE = 16000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
-
+    //private static final long QUANTILE_DATA_SIZE = 16000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
+    private static final long QUANTILE_DATA_SIZE = 6000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
     private static final long ALIGN_MASK = ~(0x7);
     private static final int SMALL_SHIFTBITNUM = 53;
     private static final int SMALL_MASK = ((1 << (SHIFTBITNUM - SMALL_SHIFTBITNUM)) - 1);
@@ -60,7 +61,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     private static final int INTERVAL_SMALL_BLOCK = (1 << (SHIFTBITNUM - SMALL_SHIFTBITNUM));
     private static final long QUANTILE_DATA_SIZE_OF_EACH_QTHREAD = QUANTILE_DATA_SIZE / EACH_QUANTILE_THREADNUM;
     private static final long SMALL_QUANTILE_DATA_SIZE_OF_EACH_QTHREAD = QUANTILE_DATA_SIZE_OF_EACH_QTHREAD / INTERVAL_SMALL_BLOCK; //每个查询线程每次查询的每个小块的总的DATASIZE
-
+    private static final long QUANTILE_READ_SIZE = QUANTILE_DATA_SIZE / EACH_QUANTILE_THREADNUM;
 
     private int current_Quantile_threadNUM = 0;
     private String[][] colName = new String[TABLENUM][COLNUM_EACHTABLE];
@@ -93,7 +94,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     {
         for(int i = 0; i < EACH_QUANTILE_THREADNUM; i++)
         {
-            this.quantile_load_buffer[0][i] = ByteBuffer.allocateDirect(QUANTILE_READ_SIZE);
+            this.quantile_load_buffer[0][i] = ByteBuffer.allocateDirect((int)QUANTILE_READ_SIZE);
             this.quantile_load_base[0][i] = ((DirectBuffer)quantile_load_buffer[0][i]).address();
         }
         long allBase = unsafe.allocateMemory(QUANTILE_DATA_SIZE);
@@ -114,7 +115,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         {
             for(int j = 0; j < EACH_QUANTILE_THREADNUM; j++)
             {
-                this.quantile_load_buffer[i][j] = ByteBuffer.allocateDirect(QUANTILE_READ_SIZE);
+                this.quantile_load_buffer[i][j] = ByteBuffer.allocateDirect((int)QUANTILE_READ_SIZE);
                 this.quantile_load_base[i][j] = ((DirectBuffer)quantile_load_buffer[i][j]).address();
             }
         }
@@ -518,30 +519,23 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 eachBlockBufferCurPos[i] = eachBlockBufferStart[i];
             }
             long readTime = 0;
-            while (leftSize > 0)
+            long s1 = System.currentTimeMillis();
+            readBuffer.clear();
+            try {
+                readChannel.read(readBuffer, readStart);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            long s2 = System.currentTimeMillis();
+            readTime += (s2 - s1);
+            long readBufferPos = readBufferBase;
+            long readEnd = readBufferBase + readSize;
+            for(; readBufferPos < readEnd; readBufferPos += 8)
             {
-                long curReadSize = Math.min(leftSize, QUANTILE_READ_SIZE);
-                leftSize -= curReadSize;
-                readBuffer.clear();
-                try {
-                    long s1 = System.currentTimeMillis();
-                    readChannel.read(readBuffer, readStart);
-                    long s2 = System.currentTimeMillis();
-                    readTime += (s2 - s1);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                readBuffer.flip();
-                readStart += curReadSize;
-                long readBufferPos = readBufferBase;
-                for(; readBufferPos < readBufferBase + curReadSize; readBufferPos += 8)
-                {
-                    long val = unsafe.getLong(null, readBufferPos);
-                    int index = (int)((val >> SMALL_SHIFTBITNUM) & SMALL_MASK);
-                    unsafe.putLong(null, eachBlockBufferCurPos[index], val);
-                    //dataBuffer[index].putLong(val);
-                    eachBlockBufferCurPos[index] += 8;
-                }
+                long val = unsafe.getLong(null, readBufferPos);
+                int index = (int)((val >> SMALL_SHIFTBITNUM) & SMALL_MASK);
+                unsafe.putLong(null, eachBlockBufferCurPos[index], val);
+                eachBlockBufferCurPos[index] += 8;
             }
             for(int i = 0; i < eachBlockSize.length; i++)
             {
