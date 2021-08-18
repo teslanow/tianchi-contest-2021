@@ -162,7 +162,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         }
         long ss = System.currentTimeMillis();
         FileChannel fileChannel = allFileChannel[0];
-        long readSize = 4 * 1024;
+        long readSize = 8 * 1024;
         ByteBuffer buffer = ByteBuffer.allocateDirect((int)readSize);
         long leftSize = fileChannel.size();
         while (leftSize > 0)
