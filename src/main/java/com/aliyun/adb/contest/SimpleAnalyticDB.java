@@ -447,41 +447,19 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             if((t & 16) == 0) {
                                 if(t == 44) {
                                     int leftIndex = (int)(val >> SHIFTBITNUM);
-                                    long beginAddress = leftBegin[leftIndex];
-                                    long size = leftSize[leftIndex];
-                                    unsafe.putLong(null, beginAddress + size, val);
-                                    size += 8;
-                                    if (size == BYTEBUFFERSIZE) {
-                                        AtomicBoolean spinLock = curLeftSpinLock[leftIndex];
-                                        while (!spinLock.compareAndSet(false, true)){}
-                                        long s1 = System.currentTimeMillis();
-                                        unsafe.copyMemory(null, beginAddress, null, leftWriteFileAddress[leftIndex], BYTEBUFFERSIZE);
-                                        leftWriteFileAddress[leftIndex] += BYTEBUFFERSIZE;
-                                        spinLock.set(false);
-                                        long e1 = System.currentTimeMillis();
-                                        writeTime += (e1 - s1);
-                                        size = 0;
-                                    }
-                                    leftSize[leftIndex] = size;
+                                    AtomicBoolean spinLock = curLeftSpinLock[leftIndex];
+                                    while (!spinLock.compareAndSet(false, true)){}
+                                    unsafe.putLong(null, leftWriteFileAddress[leftIndex], val);
+                                    leftWriteFileAddress[leftIndex] += 8;
+                                    spinLock.set(false);
                                     val = 0;
                                 }else {
                                     int rightIndex = (int)(val >> SHIFTBITNUM);
-                                    long beginAddress = rightBegin[rightIndex];
-                                    long size = rightSize[rightIndex];
-                                    unsafe.putLong(null, beginAddress + size, val);
-                                    size += 8;
-                                    if (size == BYTEBUFFERSIZE) {
-                                        AtomicBoolean spinLock = curRightSpinLock[rightIndex];
-                                        while (!spinLock.compareAndSet(false, true)){}
-                                        long s1 = System.currentTimeMillis();
-                                        unsafe.copyMemory(null, beginAddress, null, rightWriteFileAddress[rightIndex], BYTEBUFFERSIZE);
-                                        rightWriteFileAddress[rightIndex] += BYTEBUFFERSIZE;
-                                        long e1 = System.currentTimeMillis();
-                                        writeTime += (e1 - s1);
-                                        spinLock.set(false);
-                                        size = 0;
-                                    }
-                                    rightSize[rightIndex] = size;
+                                    AtomicBoolean spinLock = curRightSpinLock[rightIndex];
+                                    while (!spinLock.compareAndSet(false, true)){}
+                                    unsafe.putLong(null, rightWriteFileAddress[rightIndex], val);
+                                    rightWriteFileAddress[rightIndex] += 8;
+                                    spinLock.set(false);
                                     val = 0;
                                 }
                             }
@@ -502,71 +480,25 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         if((t & 16) == 0) {
                             if(t == 44) {
                                 int leftIndex = (int)(val >> SHIFTBITNUM);
-                                long beginAddress = leftBegin[leftIndex];
-                                long size = leftSize[leftIndex];
-                                unsafe.putLong(null, beginAddress + size, val);
-                                size += 8;
-                                if (size == BYTEBUFFERSIZE) {
-                                    AtomicBoolean spinLock = curLeftSpinLock[leftIndex];
-                                    long s1 = System.currentTimeMillis();
-                                    while (!spinLock.compareAndSet(false, true)){}
-                                    unsafe.copyMemory(null, beginAddress, null, leftWriteFileAddress[leftIndex], BYTEBUFFERSIZE);
-                                    leftWriteFileAddress[leftIndex] += BYTEBUFFERSIZE;
-                                    spinLock.set(false);
-                                    long e1 = System.currentTimeMillis();
-                                    writeTime += (e1 - s1);
-                                    size = 0;
-                                }
-                                leftSize[leftIndex] = size;
+                                AtomicBoolean spinLock = curLeftSpinLock[leftIndex];
+                                while (!spinLock.compareAndSet(false, true)){}
+                                unsafe.putLong(null, leftWriteFileAddress[leftIndex], val);
+                                leftWriteFileAddress[leftIndex] += 8;
+                                spinLock.set(false);
                                 val = 0;
                             }else {
                                 int rightIndex = (int)(val >> SHIFTBITNUM);
-                                long beginAddress = rightBegin[rightIndex];
-                                long size = rightSize[rightIndex];
-                                unsafe.putLong(null, beginAddress + size, val);
-                                size += 8;
-                                if (size == BYTEBUFFERSIZE) {
-                                    AtomicBoolean spinLock = curRightSpinLock[rightIndex];
-                                    long s1 = System.currentTimeMillis();
-                                    while (!spinLock.compareAndSet(false, true)){}
-                                    unsafe.copyMemory(null, beginAddress, null, rightWriteFileAddress[rightIndex], BYTEBUFFERSIZE);
-                                    rightWriteFileAddress[rightIndex] += BYTEBUFFERSIZE;
-                                    long e1 = System.currentTimeMillis();
-                                    writeTime += (e1 - s1);
-                                    spinLock.set(false);
-                                    size = 0;
-                                }
-                                rightSize[rightIndex] = size;
+                                AtomicBoolean spinLock = curRightSpinLock[rightIndex];
+                                while (!spinLock.compareAndSet(false, true)){}
+                                unsafe.putLong(null, rightWriteFileAddress[rightIndex], val);
+                                rightWriteFileAddress[rightIndex] += 8;
+                                spinLock.set(false);
                                 val = 0;
                             }
                         }
                         else {
                             val = (val << 1) + (val << 3) + (t - 48);
                         }
-                    }
-                    for(int i = 0; i < BOUNDARYSIZE; i++) {
-                        AtomicBoolean spinLock = curLeftSpinLock[i];
-
-                        while (!spinLock.compareAndSet(false, true)){}
-                        long s1 = System.currentTimeMillis();
-                        unsafe.copyMemory(null, leftBegin[i], null, leftWriteFileAddress[i], leftSize[i]);
-                        leftWriteFileAddress[i] += leftSize[i];
-                        spinLock.set(false);
-                        long e1 = System.currentTimeMillis();
-                        writeTime += (e1 - s1);
-                        leftSize[i] = 0;
-                    }
-                    for(int i = 0; i < BOUNDARYSIZE; i++)
-                    {
-                        AtomicBoolean spinLock = curRightSpinLock[i];
-                        while (!spinLock.compareAndSet(false, true)){}
-                        long s1 = System.currentTimeMillis();
-                        unsafe.copyMemory(null, rightBegin[i], null, rightWriteFileAddress[i], rightSize[i]);
-                        rightWriteFileAddress[i] += rightSize[i];
-                        spinLock.set(false);
-                        long e1 = System.currentTimeMillis();
-                        writeTime += (e1 - s1);
-                        rightSize[i] = 0;
                     }
                 }
             }catch (Exception e){
