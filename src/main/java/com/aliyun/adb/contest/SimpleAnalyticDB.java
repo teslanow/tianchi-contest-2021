@@ -569,6 +569,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                         long s2 = System.currentTimeMillis();
                                         while (atomicBoolean.compareAndSet(false, true)){}
                                         fileChannel.write(byteBuffer);
+                                        fileChannel.force(true);
                                         atomicBoolean.set(false);
                                         long e2 = System.currentTimeMillis();
                                         writeTime += (e2 - s2);
@@ -586,6 +587,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                         long s2 = System.currentTimeMillis();
                                         while (atomicBoolean.compareAndSet(false, true)){}
                                         fileChannel.write(byteBuffer);
+                                        fileChannel.force(true);
                                         atomicBoolean.set(false);
                                         long e2 = System.currentTimeMillis();
                                         writeTime += (e2 - s2);
@@ -603,7 +605,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     directBuffer.clear();
                     fileChannel[k].read(directBuffer, curReadStart + nowRead);
                     long val = 0;
-                    long position = 0;
                     byte t;
                     long curPos = directBufferBase;
                     long endPos = directBufferBase + realRead;
@@ -621,6 +622,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     long s2 = System.currentTimeMillis();
                                     while (atomicBoolean.compareAndSet(false, true)){}
                                     fileChannel.write(byteBuffer);
+                                    fileChannel.force(true);
                                     atomicBoolean.set(false);
                                     long e2 = System.currentTimeMillis();
                                     writeTime += (e2 - s2);
@@ -638,6 +640,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     long s2 = System.currentTimeMillis();
                                     while (atomicBoolean.compareAndSet(false, true)){}
                                     fileChannel.write(byteBuffer);
+                                    fileChannel.force(true);
                                     atomicBoolean.set(false);
                                     long e2 = System.currentTimeMillis();
                                     writeTime += (e2 - s2);
@@ -658,6 +661,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         byteBuffer.flip();
                         while (atomicBoolean.compareAndSet(false, true)){}
                         fileChannel.write(byteBuffer);
+                        fileChannel.force(true);
                         atomicBoolean.set(false);
                         byteBuffer.clear();
 
@@ -670,6 +674,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         byteBuffer.flip();
                         while (atomicBoolean.compareAndSet(false, true)){}
                         fileChannel.write(byteBuffer);
+                        fileChannel.force(true);
                         atomicBoolean.set(false);
                         byteBuffer.clear();
                     }
