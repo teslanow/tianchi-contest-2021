@@ -167,14 +167,15 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
         }
         long s = System.currentTimeMillis();
-
-
+        long size = 64 * 1024;
+        long tmp = unsafe.allocateMemory(size);
         for(int j = 0; j < BOUNDARYSIZE; j++)
         {
             for(int i = 0; i < 200; i++) {
                 long address = allRightWriteAddress[0][j];
-                unsafe.setMemory(null, address, 64 * 1024, (byte) i);
-                allRightWriteAddress[0][j] += 64 * 1024;
+                //unsafe.setMemory(null, address, 64 * 1024, (byte) i);
+                unsafe.copyMemory(null, tmp, null, address, size);
+                allRightWriteAddress[0][j] += size;
             }
         }
         for(int i = 0; i < BOUNDARYSIZE; i++)
