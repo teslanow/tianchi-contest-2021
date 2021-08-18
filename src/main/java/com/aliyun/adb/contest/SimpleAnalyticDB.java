@@ -398,6 +398,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
         @Override
         public void run() {
+            long ss = System.currentTimeMillis();
+            long writeTime = 0;
             this.leftBegin = new long[BOUNDARYSIZE];
             this.rightBegin = new long[BOUNDARYSIZE];
             this.leftSize = new long[BOUNDARYSIZE];
@@ -451,10 +453,13 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     size += 8;
                                     if (size == BYTEBUFFERSIZE) {
                                         AtomicBoolean spinLock = curLeftSpinLock[leftIndex];
+                                        long s1 = System.currentTimeMillis();
                                         while (!spinLock.compareAndSet(false, true)){}
                                         unsafe.copyMemory(null, beginAddress, null, leftWriteFileAddress[leftIndex], BYTEBUFFERSIZE);
                                         leftWriteFileAddress[leftIndex] += BYTEBUFFERSIZE;
                                         spinLock.set(false);
+                                        long e1 = System.currentTimeMillis();
+                                        writeTime += (e1 - s1);
                                         size = 0;
                                     }
                                     leftSize[leftIndex] = size;
@@ -467,9 +472,12 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     size += 8;
                                     if (size == BYTEBUFFERSIZE) {
                                         AtomicBoolean spinLock = curRightSpinLock[rightIndex];
+                                        long s1 = System.currentTimeMillis();
                                         while (!spinLock.compareAndSet(false, true)){}
                                         unsafe.copyMemory(null, beginAddress, null, rightWriteFileAddress[rightIndex], BYTEBUFFERSIZE);
                                         rightWriteFileAddress[rightIndex] += BYTEBUFFERSIZE;
+                                        long e1 = System.currentTimeMillis();
+                                        writeTime += (e1 - s1);
                                         spinLock.set(false);
                                         size = 0;
                                     }
@@ -500,10 +508,13 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 size += 8;
                                 if (size == BYTEBUFFERSIZE) {
                                     AtomicBoolean spinLock = curLeftSpinLock[leftIndex];
+                                    long s1 = System.currentTimeMillis();
                                     while (!spinLock.compareAndSet(false, true)){}
                                     unsafe.copyMemory(null, beginAddress, null, leftWriteFileAddress[leftIndex], BYTEBUFFERSIZE);
                                     leftWriteFileAddress[leftIndex] += BYTEBUFFERSIZE;
                                     spinLock.set(false);
+                                    long e1 = System.currentTimeMillis();
+                                    writeTime += (e1 - s1);
                                     size = 0;
                                 }
                                 leftSize[leftIndex] = size;
@@ -516,9 +527,12 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 size += 8;
                                 if (size == BYTEBUFFERSIZE) {
                                     AtomicBoolean spinLock = curRightSpinLock[rightIndex];
+                                    long s1 = System.currentTimeMillis();
                                     while (!spinLock.compareAndSet(false, true)){}
                                     unsafe.copyMemory(null, beginAddress, null, rightWriteFileAddress[rightIndex], BYTEBUFFERSIZE);
                                     rightWriteFileAddress[rightIndex] += BYTEBUFFERSIZE;
+                                    long e1 = System.currentTimeMillis();
+                                    writeTime += (e1 - s1);
                                     spinLock.set(false);
                                     size = 0;
                                 }
@@ -532,19 +546,25 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++) {
                         AtomicBoolean spinLock = curLeftSpinLock[i];
+                        long s1 = System.currentTimeMillis();
                         while (!spinLock.compareAndSet(false, true)){}
                         unsafe.copyMemory(null, leftBegin[i], null, leftWriteFileAddress[i], leftSize[i]);
                         leftWriteFileAddress[i] += leftSize[i];
                         spinLock.set(false);
+                        long e1 = System.currentTimeMillis();
+                        writeTime += (e1 - s1);
                         leftSize[i] = 0;
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++)
                     {
                         AtomicBoolean spinLock = curRightSpinLock[i];
+                        long s1 = System.currentTimeMillis();
                         while (!spinLock.compareAndSet(false, true)){}
                         unsafe.copyMemory(null, rightBegin[i], null, rightWriteFileAddress[i], rightSize[i]);
                         rightWriteFileAddress[i] += rightSize[i];
                         spinLock.set(false);
+                        long e1 = System.currentTimeMillis();
+                        writeTime += (e1 - s1);
                         rightSize[i] = 0;
                     }
                 }
@@ -552,7 +572,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 e.printStackTrace();
             }
             latch.countDown();
-
+            long ee = System.currentTimeMillis();
+            System.out.println("Thread " + threadNo + " total " + (ee - ss) + " write time " + writeTime);
         }
 
     }
