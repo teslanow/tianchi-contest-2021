@@ -41,16 +41,16 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
 //    private static final int QUANTILE_READ_SIZE = 1024 * 1024 * 16;
     //提交需改
-    private static final int BOUNDARYSIZE = 520;
+    private static final int BOUNDARYSIZE = 1040;
     private static final int THREADNUM = 24;
     private static final long DATALENGTH = 1000000000;
     //private static final long DATALENGTH = 300000000;
-    private static final int BYTEBUFFERSIZE = 1024 * 128;
+    private static final int BYTEBUFFERSIZE = 1024 * 64;
     private static final int EACHREADSIZE = 1024 * 1024 * 16;
 
     private static final int TABLENUM = 2;
     private static final int COLNUM_EACHTABLE = 2;
-    private static final int SHIFTBITNUM = 54;
+    private static final int SHIFTBITNUM = 53;
     private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
     private static final long QUANTILE_DATA_SIZE = 16000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
     //private static final long QUANTILE_DATA_SIZE = 6000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
