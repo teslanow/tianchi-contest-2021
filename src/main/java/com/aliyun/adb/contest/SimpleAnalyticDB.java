@@ -162,14 +162,22 @@ public class SimpleAnalyticDB implements AnalyticDB {
         }
         long ss = System.currentTimeMillis();
         FileChannel fileChannel = allFileChannel[0];
-        long readSize = 8 * 1024;
-        ByteBuffer buffer = ByteBuffer.allocateDirect((int)readSize);
         long leftSize = fileChannel.size();
-        while (leftSize > 0)
+        long mapBegin = 0;
+        while (leftSize > Integer.MAX_VALUE)
         {
-            buffer.clear();
-            fileChannel.read(buffer);
-            leftSize -= readSize;
+            leftSize -= Integer.MAX_VALUE;
+            MappedByteBuffer mappedByteBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, mapBegin, Integer.MAX_VALUE);
+            for(int i = 0; i < Integer.MAX_VALUE; i++)
+            {
+                byte b = mappedByteBuffer.get();
+            }
+            mapBegin += Integer.MAX_VALUE;
+        }
+        MappedByteBuffer mappedByteBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, mapBegin, leftSize);
+        for(int i = 0; i < leftSize; i++)
+        {
+            byte b = mappedByteBuffer.get();
         }
         long ee = System.currentTimeMillis();
         System.out.println("read time " + (ee - ss));
