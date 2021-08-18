@@ -41,11 +41,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
 //    private static final int QUANTILE_READ_SIZE = 1024 * 1024 * 16;
     //提交需改
-    private static final int BOUNDARYSIZE = 1040;
-    private static final int THREADNUM = 16;
+    private static final int BOUNDARYSIZE = 2080;
+    private static final int THREADNUM = 24;
     private static final long DATALENGTH = 1000000000;
     //private static final long DATALENGTH = 300000000;
-    private static final int BYTEBUFFERSIZE = 1024 * 64;
+    private static final int BYTEBUFFERSIZE = 1024 * 32;
     private static final int EACHREADSIZE = 1024 * 1024 * 16;
 
     private static final int TABLENUM = 2;
