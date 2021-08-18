@@ -168,7 +168,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         }
         long s = System.currentTimeMillis();
 
-        for(int i = 0; i < 16 * 1024; i++)
+        for(int i = 0; i < 200; i++)
         {
             for(int j = 0; j < BOUNDARYSIZE; j++)
             {
