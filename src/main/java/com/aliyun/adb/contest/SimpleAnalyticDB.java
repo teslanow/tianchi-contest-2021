@@ -167,11 +167,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
             }
         }
 
-        long size = 16 * 1024;
+        long size = 8 * 1024;
         long tmp = unsafe.allocateMemory(size);
         unsafe.setMemory(null, tmp, size, (byte) 1);
         long s = System.currentTimeMillis();
-        for(int i = 0; i < 460; i++)
+        for(int i = 0; i < 920; i++)
         {
             for(int j = 0; j < TABLENUM; j++)
             {
