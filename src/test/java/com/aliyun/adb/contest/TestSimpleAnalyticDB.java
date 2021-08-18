@@ -16,7 +16,7 @@ public class TestSimpleAnalyticDB {
     public void testCorrectness() throws Exception {
         File testDataDir = new File("./test_data3");
         File testWorkspaceDir = new File("./target");
-        File testResultsFile = new File("./test_result/results");
+        File testResultsFile = new File("./test_result/results1");
         List<String> ans = new ArrayList<>();
 
         try (BufferedReader resReader = new BufferedReader(new FileReader(testResultsFile))) {
@@ -29,35 +29,28 @@ public class TestSimpleAnalyticDB {
         // ROUND #1
         SimpleAnalyticDB analyticDB1 = new SimpleAnalyticDB();
         analyticDB1.load(testDataDir.getAbsolutePath(), testWorkspaceDir.getAbsolutePath());
-        BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(new File("/media/nhpcc416/新加卷/okks/2021-tianchi-contest-2/test_result/results1")));
-        double base = 0.001;
-        for(int i = 0; i < 1000; i++)
-        {
-            String aa = analyticDB1.quantile("lineitem","HELL0_ORDERKEY", base );
-            System.out.println("lineitem HELL0_ORDERKEY " + new DecimalFormat("0.000").format(base) + " " + aa + "\n");
-            bufferedWriter.write("lineitem HELL0_ORDERKEY " + new DecimalFormat("0.000").format(base) + " " + aa + "\n");
-            base += 0.001;
+
+        testQuery(analyticDB1, ans, 10);
+
+         //To simulate exiting
+        analyticDB1 = null;
+
+        long ss = System.currentTimeMillis();
+        // ROUND #2
+        SimpleAnalyticDB analyticDB2 = new SimpleAnalyticDB();
+        analyticDB2.load(testDataDir.getAbsolutePath(), testWorkspaceDir.getAbsolutePath());
+
+        Executor testWorkers = Executors.newFixedThreadPool(8);
+
+        CompletableFuture[] futures = new CompletableFuture[8];
+
+        for (int i = 0; i < 8; i++) {
+            futures[i] = CompletableFuture.runAsync(() -> testQuery(analyticDB2, ans, 500), testWorkers);
         }
-        bufferedWriter.flush();
-        bufferedWriter.close();
-//        testQuery(analyticDB1, ans, 10);
-//
-//        // To simulate exiting
-//        analyticDB1 = null;
-//
-//        // ROUND #2
-//        SimpleAnalyticDB analyticDB2 = new SimpleAnalyticDB();
-//        analyticDB2.load(testDataDir.getAbsolutePath(), testWorkspaceDir.getAbsolutePath());
-//
-//        Executor testWorkers = Executors.newFixedThreadPool(8);
-//
-//        CompletableFuture[] futures = new CompletableFuture[8];
-//
-//        for (int i = 0; i < 8; i++) {
-//            futures[i] = CompletableFuture.runAsync(() -> testQuery(analyticDB2, ans, 500), testWorkers);
-//        }
-//
-//        CompletableFuture.allOf(futures).get();
+
+        CompletableFuture.allOf(futures).get();
+        long ee = System.currentTimeMillis();
+        System.out.println("Query time " + (ee - ss));
     }
 
     private void testQuery(AnalyticDB analyticDB, List<String> ans, int testCount) {
