@@ -166,9 +166,11 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 rightChannelSpinLock[j][i] = new AtomicBoolean();
             }
         }
-        long s = System.currentTimeMillis();
+
         long size = 64 * 1024;
         long tmp = unsafe.allocateMemory(size);
+        unsafe.setMemory(null, tmp, size, (byte) 1);
+        long s = System.currentTimeMillis();
         for(int i = 0; i < 230; i++)
         {
             for(int j = 0; j < TABLENUM; j++)
@@ -177,10 +179,10 @@ public class SimpleAnalyticDB implements AnalyticDB {
                 {
                     long address = allRightWriteAddress[j][k];
                     unsafe.copyMemory(null, tmp, null, address, size);
-                    allRightWriteAddress[0][j] += size;
+                    allRightWriteAddress[j][k] += size;
                     address = allLeftWriteAddress[j][k];
                     unsafe.copyMemory(null, tmp, null, address, size);
-                    allLeftWriteAddress[0][j] += size;
+                    allLeftWriteAddress[j][k] += size;
                 }
             }
         }
