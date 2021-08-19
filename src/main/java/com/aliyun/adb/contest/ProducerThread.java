@@ -43,10 +43,10 @@ public class ProducerThread implements Runnable{
             for(int k = 0; k < Constant.TABLENUM; k++) {
                 long nowRead = 0, realRead;
                 long leftSize = trueSizeOfMmap[k];
+                System.out.println("k");
+                int num = 0;
                 while (leftSize > 0) {
                     realRead = Math.min(leftSize, Constant.EACHREADSIZE);
-                    if(leftSize < Constant.EACHREADSIZE)
-                        System.out.println("hello");
                     directBuffer.clear();
                     fileChannel[k].read(directBuffer, realRead + nowRead);
                     for (int i = (int) realRead - 1; i >= 0; i--) {
@@ -56,7 +56,8 @@ public class ProducerThread implements Runnable{
                             break;
                         }
                     }
-                    System.out.println("realRead " + realRead);
+                    if(realRead == 0)
+                        break;
                     leftSize -= realRead;
                     nowRead += realRead;
                     long val = 0;
@@ -67,6 +68,7 @@ public class ProducerThread implements Runnable{
                     for (; curPos < endPos; curPos++) {
                         t = UNSAFE.getByte(curPos);
                         if ((t & 16) == 0) {
+                            num++;
                             int index = (int)(val >> Constant.SHIFTBITNUM);
                             long address = allBufsAddress[col][index];
                             long size = allBufSize[col][index];
@@ -94,6 +96,7 @@ public class ProducerThread implements Runnable{
                     }
 
                 }
+                System.out.println("thread " + threadNo + " num " + num);
                 for(int i = 0; i < Constant.COLNUM_EACHTABLE; i++)
                 {
                     for(int j = 0; j < Constant.BOUNDARYSIZE; j++)
@@ -101,7 +104,7 @@ public class ProducerThread implements Runnable{
                         Partion partion = allPartion[i][j];
                         long address = allBufsAddress[i][j];
                         partion.acquire();
-                        partion.writeSeq(address, Constant.BYTEBUFFERSIZE, k);
+                        partion.writeSeq(address, allBufSize[i][j], k);
                         allBufSize[i][j] = 0;
                     }
                 }
