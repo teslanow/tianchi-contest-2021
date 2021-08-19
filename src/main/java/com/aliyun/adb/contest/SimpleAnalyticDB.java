@@ -550,7 +550,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         }
                         nowRead += realRead;
                         long val = 0;
-                        long position;
                         byte t;
                         long curPos = directBufferBase;
                         long endPos = directBufferBase + realRead;
@@ -588,7 +587,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 }
                             }
                             else {
-                                val = val * 10 + (t - 48);
+                                val = (val << 1) + (val << 3) + (t - 48);
                             }
                         }
                     }
@@ -634,7 +633,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             }
                         }
                         else {
-                            val = val * 10 + (t - 48);
+                            val = (val << 1) + (val << 3) + (t - 48);
                         }
                     }
                     for(int i = 0; i < BOUNDARYSIZE; i++) {
