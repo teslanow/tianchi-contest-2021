@@ -310,7 +310,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
             copyBase += (dataSize_ofSmallBlock[i][smallBlockIndex] << 3);
         }
         ans = MyFind.quickFind(unsafe, byteBufferBase ,byteBufferBase + (eachSmallBlockSize[smallBlockIndex] << 3) - 8, ((long)rankDiff << 3)).toString();
-        //System.out.println("one quantile time is " + (e1 - s1) + " " + readTime +  " " + time1 + " " + time2 + " " + time3);
+        long e1 = System.currentTimeMillis();
+        System.out.println("one quantile time is " + (e1 - s1));
         if(quantileTime.addAndGet(1) >= 500)
             return "0";
         else
@@ -564,7 +565,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                         FileChannel fileChannel = leftChannel[k][leftIndex];
                                         AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
                                         byteBuffer.flip();
-                                        while (atomicBoolean.compareAndSet(false, true)){}
+                                        while (!atomicBoolean.compareAndSet(false, true)){}
                                         fileChannel.write(byteBuffer);
                                         atomicBoolean.set(false);
                                         byteBuffer.clear();
@@ -578,7 +579,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                         FileChannel fileChannel = rightChannel[k][rightIndex];
                                         AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
                                         byteBuffer.flip();
-                                        while (atomicBoolean.compareAndSet(false, true)){}
+                                        while (!atomicBoolean.compareAndSet(false, true)){}
                                         fileChannel.write(byteBuffer);
                                         atomicBoolean.set(false);
                                         byteBuffer.clear();
@@ -610,7 +611,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     FileChannel fileChannel = leftChannel[k][leftIndex];
                                     AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
                                     byteBuffer.flip();
-                                    while (atomicBoolean.compareAndSet(false, true)){}
+                                    while (!atomicBoolean.compareAndSet(false, true)){}
                                     fileChannel.write(byteBuffer);
                                     atomicBoolean.set(false);
                                     byteBuffer.clear();
@@ -624,7 +625,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     FileChannel fileChannel = rightChannel[k][rightIndex];
                                     AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
                                     byteBuffer.flip();
-                                    while (atomicBoolean.compareAndSet(false, true)){}
+                                    while (!atomicBoolean.compareAndSet(false, true)){}
                                     fileChannel.write(byteBuffer);
                                     atomicBoolean.set(false);
                                     byteBuffer.clear();
@@ -641,7 +642,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         AtomicBoolean atomicBoolean = leftChannelSpinLock[k][i];
                         ByteBuffer byteBuffer = leftBufs[i];
                         byteBuffer.flip();
-                        while (atomicBoolean.compareAndSet(false, true)){}
+                        while (!atomicBoolean.compareAndSet(false, true)){}
                         fileChannel.write(byteBuffer);
                         atomicBoolean.set(false);
                         byteBuffer.clear();
@@ -653,7 +654,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         AtomicBoolean atomicBoolean = rightChannelSpinLock[k][i];
                         ByteBuffer byteBuffer = rightBufs[i];
                         byteBuffer.flip();
-                        while (atomicBoolean.compareAndSet(false, true)){}
+                        while (!atomicBoolean.compareAndSet(false, true)){}
                         fileChannel.write(byteBuffer);
                         atomicBoolean.set(false);
                         byteBuffer.clear();
