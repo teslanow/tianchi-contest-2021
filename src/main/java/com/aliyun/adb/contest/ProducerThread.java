@@ -41,14 +41,14 @@ public class ProducerThread implements Runnable{
         long[][] allBufSize = new long[Constant.COLNUM_EACHTABLE][Constant.BOUNDARYSIZE];
         try{
             for(int k = 0; k < Constant.TABLENUM; k++) {
-                long nowRead = 0, realRead;
+                long nowRead = readStart[k], realRead;
                 long leftSize = trueSizeOfMmap[k];
                 System.out.println("k");
                 int num = 0;
                 while (leftSize > 0) {
                     realRead = Math.min(leftSize, Constant.EACHREADSIZE);
                     directBuffer.clear();
-                    fileChannel[k].read(directBuffer, realRead + nowRead);
+                    fileChannel[k].read(directBuffer, nowRead);
                     for (int i = (int) realRead - 1; i >= 0; i--) {
                         if (UNSAFE.getByte(directBufferBase + i) != 10) {
                             realRead--;

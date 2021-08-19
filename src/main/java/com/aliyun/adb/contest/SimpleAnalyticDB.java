@@ -271,7 +271,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
         }
         barriers[1].await();
         CONSUMERPOOL.shutdown();
-        while (!CONSUMERPOOL.isShutdown()){Thread.sleep(1000);}
+        while (CONSUMERPOOL.getQueue().size() != 0){Thread.sleep(1000);}
         StringBuilder builder= new StringBuilder(workDir).append("/index");
         FileChannel fileChannel = new RandomAccessFile(new File(builder.toString()), "rw").getChannel();
         for(int i = 0; i < Constant.TABLENUM; i++)
