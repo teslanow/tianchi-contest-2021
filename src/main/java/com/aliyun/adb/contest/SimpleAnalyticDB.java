@@ -42,7 +42,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //    private static final int QUANTILE_READ_SIZE = 1024 * 1024 * 16;
     //提交需改
     private static final int BOUNDARYSIZE = 520;
-    private static final int THREADNUM = 32;
+    private static final int THREADNUM = 30;
     private static final long DATALENGTH = 1000000000;
     //private static final long DATALENGTH = 300000000;
     private static final int BYTEBUFFERSIZE = 1024 * 64;
@@ -130,53 +130,54 @@ public class SimpleAnalyticDB implements AnalyticDB {
         long ss = System.currentTimeMillis();
         workDir = workspaceDir;
         //判断工作区是否为空
-        if(new File(workspaceDir + "/index").exists())
-        {
-            initForAllQThread();
-            System.out.println("sencond load");
-            RandomAccessFile file = new RandomAccessFile(new File(workDir + "/index"), "r");
-            FileChannel fileChannel = file.getChannel();
-            byte[] bytes = new byte[(int)fileChannel.size()];
-            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
-            byteBuffer.clear();
-            fileChannel.read(byteBuffer);
-            byteBuffer.flip();
-            int curPos = 0;
-            String[] tmpString = new String[TABLENUM * COLNUM_EACHTABLE + TABLENUM];
-            for(int pre = 0, index = 0;;)
-            {
-                if(bytes[curPos] == 10)
-                {
-                    tmpString[index++] = new String(bytes, pre, curPos - pre, "UTF-8");
-                    if(index >= TABLENUM * COLNUM_EACHTABLE + TABLENUM)
-                    {
-                        curPos++;
-                        break;
-                    }
-                    pre = curPos + 1;
-                }
-                curPos++;
-            }
-            int index_name = 0;
-            byteBuffer.position(curPos);
-            for(int i = 0; i < TABLENUM; i++)
-            {
-                tabName[i] = tmpString[index_name++];
-                for(int j = 0; j < COLNUM_EACHTABLE; j++)
-                {
-                    colName[i][j] = tmpString[index_name++];
-                    for( int k = 0; k < BOUNDARYSIZE; k++)
-                    {
-                        beginOrder[i][j][k] = byteBuffer.getInt();
-                    }
-                }
-            }
-            return;
-        }
-        else
-        {
-            initOnlyForOneQThread();
-        }
+//        if(new File(workspaceDir + "/index").exists())
+//        {
+//            initForAllQThread();
+//            System.out.println("sencond load");
+//            RandomAccessFile file = new RandomAccessFile(new File(workDir + "/index"), "r");
+//            FileChannel fileChannel = file.getChannel();
+//            byte[] bytes = new byte[(int)fileChannel.size()];
+//            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
+//            byteBuffer.clear();
+//            fileChannel.read(byteBuffer);
+//            byteBuffer.flip();
+//            int curPos = 0;
+//            String[] tmpString = new String[TABLENUM * COLNUM_EACHTABLE + TABLENUM];
+//            for(int pre = 0, index = 0;;)
+//            {
+//                if(bytes[curPos] == 10)
+//                {
+//                    tmpString[index++] = new String(bytes, pre, curPos - pre, "UTF-8");
+//                    if(index >= TABLENUM * COLNUM_EACHTABLE + TABLENUM)
+//                    {
+//                        curPos++;
+//                        break;
+//                    }
+//                    pre = curPos + 1;
+//                }
+//                curPos++;
+//            }
+//            int index_name = 0;
+//            byteBuffer.position(curPos);
+//            for(int i = 0; i < TABLENUM; i++)
+//            {
+//                tabName[i] = tmpString[index_name++];
+//                for(int j = 0; j < COLNUM_EACHTABLE; j++)
+//                {
+//                    colName[i][j] = tmpString[index_name++];
+//                    for( int k = 0; k < BOUNDARYSIZE; k++)
+//                    {
+//                        beginOrder[i][j][k] = byteBuffer.getInt();
+//                    }
+//                }
+//            }
+//            return;
+//        }
+//        else
+//        {
+//            initOnlyForOneQThread();
+//        }
+        initOnlyForOneQThread();
         File dir = new File(tpchDataFileDir);
         loadStore(dir.listFiles());
         long end = System.currentTimeMillis();
