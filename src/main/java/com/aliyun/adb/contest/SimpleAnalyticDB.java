@@ -16,9 +16,35 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class SimpleAnalyticDB implements AnalyticDB {
 
+//    private static final int BOUNDARYSIZE = 130;
+//    private static final int QUANTILE_DATA_SIZE = 32000000; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
+//    private static final int THREADNUM = 16;
+//    private static final long DATALENGTH = 500000000;
+//    private static final int BYTEBUFFERSIZE = 1024 * 128;
+//    private static final int EACHREADSIZE = 1024 * 1024 * 16;
+//    //private static final int EACHREADSIZE = 1024;
+//    private static final int TABLENUM = 2;
+//    private static final int COLNUM_EACHTABLE = 2;
+//    private static final int SHIFTBITNUM = 56;
+//    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
+
+//    private static final int BOUNDARYSIZE = 130;
+//    private static final int QUANTILE_DATA_SIZE = 1600; //每次查询的data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
+//    private static final int THREADNUM = 1;
+//    private static final long DATALENGTH = 10000;
+//    private static final int BYTEBUFFERSIZE = 1024 * 128;
+//    private static final int EACHREADSIZE = 1024 ;
+//    //private static final int EACHREADSIZE = 1024;
+//    private static final int TABLENUM = 2;
+//    private static final int COLNUM_EACHTABLE = 2;
+//    private static final int SHIFTBITNUM = 56;
+//    private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
+//    private static final int QUANTILE_READ_SIZE = 1024 * 1024 * 16;
+    //提交需改
     private static final int BOUNDARYSIZE = 520;
-    private static final int THREADNUM = 32;
+    private static final int THREADNUM = 30;
     private static final long DATALENGTH = 1000000000;
+    //private static final long DATALENGTH = 300000000;
     private static final int BYTEBUFFERSIZE = 1024 * 64;
     private static final int EACHREADSIZE = 1024 * 1024 * 16;
 
@@ -27,6 +53,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
     private static final int SHIFTBITNUM = 54;
     private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
     private static final long QUANTILE_DATA_SIZE = 16000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
+    //private static final long QUANTILE_DATA_SIZE = 6000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
     private static final long ALIGN_MASK = ~(0x7);
     private static final int SMALL_SHIFTBITNUM = 53;
     private static final int SMALL_MASK = ((1 << (SHIFTBITNUM - SMALL_SHIFTBITNUM)) - 1);
@@ -534,11 +561,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                     int leftIndex = (int)(val >> SHIFTBITNUM);
                                     ByteBuffer byteBuffer = leftBufs[leftIndex];
                                     byteBuffer.putLong(val);
-                                    if (byteBuffer.position() < BYTEBUFFERSIZE) {
-                                        val = 0;
-                                    }
-                                    else
-                                    {
+                                    if (byteBuffer.position() == BYTEBUFFERSIZE) {
                                         FileChannel fileChannel = leftChannel[k][leftIndex];
                                         AtomicBoolean atomicBoolean = leftChannelSpinLock[k][leftIndex];
                                         byteBuffer.flip();
@@ -546,17 +569,13 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                         fileChannel.write(byteBuffer);
                                         atomicBoolean.set(false);
                                         byteBuffer.clear();
-                                        val = 0;
                                     }
+                                    val = 0;
                                 }else {
                                     int rightIndex = (int)(val >> SHIFTBITNUM);
                                     ByteBuffer byteBuffer = rightBufs[rightIndex];
                                     byteBuffer.putLong(val);
-                                    if (byteBuffer.position() < BYTEBUFFERSIZE) {
-                                        val = 0;
-                                    }
-                                    else
-                                    {
+                                    if (byteBuffer.position() == BYTEBUFFERSIZE) {
                                         FileChannel fileChannel = rightChannel[k][rightIndex];
                                         AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
                                         byteBuffer.flip();
@@ -564,9 +583,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                         fileChannel.write(byteBuffer);
                                         atomicBoolean.set(false);
                                         byteBuffer.clear();
-                                        val = 0;
                                     }
-
+                                    val = 0;
                                 }
                             }
                             else {
