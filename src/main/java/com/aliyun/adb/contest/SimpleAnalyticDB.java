@@ -42,10 +42,10 @@ public class SimpleAnalyticDB implements AnalyticDB {
 //    private static final int QUANTILE_READ_SIZE = 1024 * 1024 * 16;
     //提交需改
     private static final int BOUNDARYSIZE = 520;
-    private static final int THREADNUM = 16;
+    private static final int THREADNUM = 20;
     private static final long DATALENGTH = 1000000000;
     //private static final long DATALENGTH = 300000000;
-    private static final int BYTEBUFFERSIZE = 1024 * 64;
+    private static final int BYTEBUFFERSIZE = 1024 * 8;
     private static final int EACHREADSIZE = 1024 * 1024 * 16;
 
     private static final int TABLENUM = 2;
@@ -129,53 +129,54 @@ public class SimpleAnalyticDB implements AnalyticDB {
         long ss = System.currentTimeMillis();
         workDir = workspaceDir;
         //判断工作区是否为空
-        if(new File(workspaceDir + "/index").exists())
-        {
-            initForAllQThread();
-            System.out.println("sencond load");
-            RandomAccessFile file = new RandomAccessFile(new File(workDir + "/index"), "r");
-            FileChannel fileChannel = file.getChannel();
-            byte[] bytes = new byte[(int)fileChannel.size()];
-            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
-            byteBuffer.clear();
-            fileChannel.read(byteBuffer);
-            byteBuffer.flip();
-            int curPos = 0;
-            String[] tmpString = new String[TABLENUM * COLNUM_EACHTABLE + TABLENUM];
-            for(int pre = 0, index = 0;;)
-            {
-                if(bytes[curPos] == 10)
-                {
-                    tmpString[index++] = new String(bytes, pre, curPos - pre, "UTF-8");
-                    if(index >= TABLENUM * COLNUM_EACHTABLE + TABLENUM)
-                    {
-                        curPos++;
-                        break;
-                    }
-                    pre = curPos + 1;
-                }
-                curPos++;
-            }
-            int index_name = 0;
-            byteBuffer.position(curPos);
-            for(int i = 0; i < TABLENUM; i++)
-            {
-                tabName[i] = tmpString[index_name++];
-                for(int j = 0; j < COLNUM_EACHTABLE; j++)
-                {
-                    colName[i][j] = tmpString[index_name++];
-                    for( int k = 0; k < BOUNDARYSIZE; k++)
-                    {
-                        beginOrder[i][j][k] = byteBuffer.getInt();
-                    }
-                }
-            }
-            return;
-        }
-        else
-        {
-            initOnlyForOneQThread();
-        }
+//        if(new File(workspaceDir + "/index").exists())
+//        {
+//            initForAllQThread();
+//            System.out.println("sencond load");
+//            RandomAccessFile file = new RandomAccessFile(new File(workDir + "/index"), "r");
+//            FileChannel fileChannel = file.getChannel();
+//            byte[] bytes = new byte[(int)fileChannel.size()];
+//            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
+//            byteBuffer.clear();
+//            fileChannel.read(byteBuffer);
+//            byteBuffer.flip();
+//            int curPos = 0;
+//            String[] tmpString = new String[TABLENUM * COLNUM_EACHTABLE + TABLENUM];
+//            for(int pre = 0, index = 0;;)
+//            {
+//                if(bytes[curPos] == 10)
+//                {
+//                    tmpString[index++] = new String(bytes, pre, curPos - pre, "UTF-8");
+//                    if(index >= TABLENUM * COLNUM_EACHTABLE + TABLENUM)
+//                    {
+//                        curPos++;
+//                        break;
+//                    }
+//                    pre = curPos + 1;
+//                }
+//                curPos++;
+//            }
+//            int index_name = 0;
+//            byteBuffer.position(curPos);
+//            for(int i = 0; i < TABLENUM; i++)
+//            {
+//                tabName[i] = tmpString[index_name++];
+//                for(int j = 0; j < COLNUM_EACHTABLE; j++)
+//                {
+//                    colName[i][j] = tmpString[index_name++];
+//                    for( int k = 0; k < BOUNDARYSIZE; k++)
+//                    {
+//                        beginOrder[i][j][k] = byteBuffer.getInt();
+//                    }
+//                }
+//            }
+//            return;
+//        }
+//        else
+//        {
+//            initOnlyForOneQThread();
+//        }
+        initOnlyForOneQThread();
         File dir = new File(tpchDataFileDir);
         loadStore(dir.listFiles());
         long end = System.currentTimeMillis();
@@ -506,8 +507,8 @@ public class SimpleAnalyticDB implements AnalyticDB {
         long directBufferBase;
         FileChannel[] fileChannel;
         ByteBuffer directBuffer;
-        ByteBuffer[] leftBufs;
-        ByteBuffer[] rightBufs;
+        long[][] leftBufs;
+        long[][] rightBufs;
         //初始化
         public ThreadTask(int threadNo, long[] readStart ,long[] trueSizeOfMmap, FileChannel[] fileChannel) throws Exception {
             this.threadNo = threadNo;
@@ -515,20 +516,18 @@ public class SimpleAnalyticDB implements AnalyticDB {
             this.trueSizeOfMmap = trueSizeOfMmap;
             this.fileChannel = fileChannel;
             this.directBuffer = ByteBuffer.allocateDirect(EACHREADSIZE);
-            this.leftBufs = new ByteBuffer[BOUNDARYSIZE];
-            this.rightBufs = new ByteBuffer[BOUNDARYSIZE];
             this.directBufferBase = ((DirectBuffer)directBuffer).address();
         }
 
         @Override
         public void run() {
-            for (int i = 0; i < BOUNDARYSIZE; i++) {
-                leftBufs[i] = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
-                leftBufs[i].order(ByteOrder.LITTLE_ENDIAN);
-                rightBufs[i] = ByteBuffer.allocateDirect(BYTEBUFFERSIZE);
-                rightBufs[i].order(ByteOrder.LITTLE_ENDIAN);
-            }
-            FileChannel outChannel = leftChannel[0][threadNo];
+            long s1 = System.currentTimeMillis();
+            leftBufs = new long[BYTEBUFFERSIZE][BOUNDARYSIZE];
+            rightBufs = new long[BYTEBUFFERSIZE][BOUNDARYSIZE];
+            int[] leftWriteIndex = new int[BOUNDARYSIZE];
+            int[] rightWriteIndex = new int[BOUNDARYSIZE];
+            long s2 = System.currentTimeMillis();
+            System.out.println("Thread " + threadNo + " " + (s2 - s1));
             try{
                 for(int k = 0; k < TABLENUM; k++)
                 {
@@ -557,23 +556,15 @@ public class SimpleAnalyticDB implements AnalyticDB {
                             if((t & 16) == 0) {
                                 if(t == 44) {
                                     int leftIndex = (int)(val >> SHIFTBITNUM);
-                                    ByteBuffer byteBuffer = leftBufs[leftIndex];
-                                    byteBuffer.putLong(val);
-                                    if (byteBuffer.position() == BYTEBUFFERSIZE) {
-                                        byteBuffer.flip();
-                                        outChannel.write(byteBuffer);
-                                        byteBuffer.clear();
-                                    }
+                                    int toWriteIndex = leftWriteIndex[leftIndex];
+                                    leftBufs[toWriteIndex][leftIndex] = val;
+                                    leftWriteIndex[leftIndex] = (toWriteIndex + 1) % BYTEBUFFERSIZE;
                                     val = 0;
                                 }else {
                                     int rightIndex = (int)(val >> SHIFTBITNUM);
-                                    ByteBuffer byteBuffer = rightBufs[rightIndex];
-                                    byteBuffer.putLong(val);
-                                    if (byteBuffer.position() == BYTEBUFFERSIZE) {
-                                        byteBuffer.flip();
-                                        outChannel.write(byteBuffer);
-                                        byteBuffer.clear();
-                                    }
+                                    int toWriteIndex = rightWriteIndex[rightIndex];
+                                    rightBufs[toWriteIndex][rightIndex] = val;
+                                    rightWriteIndex[rightIndex] = (toWriteIndex + 1) % BYTEBUFFERSIZE;
                                     val = 0;
                                 }
                             }
@@ -594,43 +585,21 @@ public class SimpleAnalyticDB implements AnalyticDB {
                         if((t & 16) == 0) {
                             if(t == 44) {
                                 int leftIndex = (int)(val >> SHIFTBITNUM);
-                                ByteBuffer byteBuffer = leftBufs[leftIndex];
-                                byteBuffer.putLong(val);
-                                if (byteBuffer.position() == BYTEBUFFERSIZE) {
-                                    byteBuffer.flip();
-                                    outChannel.write(byteBuffer);
-                                    byteBuffer.clear();
-                                }
+                                int toWriteIndex = leftWriteIndex[leftIndex];
+                                leftBufs[toWriteIndex][leftIndex] = val;
+                                leftWriteIndex[leftIndex] = (toWriteIndex + 1) % BYTEBUFFERSIZE;
                                 val = 0;
                             }else {
                                 int rightIndex = (int)(val >> SHIFTBITNUM);
-                                ByteBuffer byteBuffer = rightBufs[rightIndex];
-                                byteBuffer.putLong(val);
-                                if (byteBuffer.position() == BYTEBUFFERSIZE) {
-                                    byteBuffer.flip();
-                                    outChannel.write(byteBuffer);
-                                    byteBuffer.clear();
-                                }
+                                int toWriteIndex = rightWriteIndex[rightIndex];
+                                rightBufs[toWriteIndex][rightIndex] = val;
+                                rightWriteIndex[rightIndex] = (toWriteIndex + 1) % BYTEBUFFERSIZE;
                                 val = 0;
                             }
                         }
                         else {
                             val = val * 10 + (t - 48);
                         }
-                    }
-                    for(int i = 0; i < BOUNDARYSIZE; i++) {
-                        ByteBuffer byteBuffer = leftBufs[i];
-                        byteBuffer.flip();
-                        outChannel.write(byteBuffer);
-                        byteBuffer.clear();
-
-                    }
-                    for(int i = 0; i < BOUNDARYSIZE; i++)
-                    {
-                        ByteBuffer byteBuffer = rightBufs[i];
-                        byteBuffer.flip();
-                        outChannel.write(byteBuffer);
-                        byteBuffer.clear();
                     }
                 }
             }catch (Exception e){
