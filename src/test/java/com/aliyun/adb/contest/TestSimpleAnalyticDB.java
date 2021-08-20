@@ -14,7 +14,7 @@ public class TestSimpleAnalyticDB {
 
     @Test
     public void testCorrectness() throws Exception {
-        File testDataDir = new File("./test_data");
+        File testDataDir = new File("./test_data3");
         File testWorkspaceDir = new File("./target");
         File testResultsFile = new File("./test_result/results1");
         List<String> ans = new ArrayList<>();
