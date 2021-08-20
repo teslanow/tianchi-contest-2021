@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class SimpleAnalyticDB implements AnalyticDB {
 
     //提交需改
-    private static final int BOUNDARYSIZE = 520;
+    private static final int BOUNDARYSIZE = 1040;
     private static final int THREADNUM = 16;
     private static final long DATALENGTH = 1000000000;
     //private static final long DATALENGTH = 300000000;
@@ -26,7 +26,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
 
     private static final int TABLENUM = 2;
     private static final int COLNUM_EACHTABLE = 2;
-    private static final int SHIFTBITNUM = 54;
+    private static final int SHIFTBITNUM = 53;
     private static final int CONCURRENT_QUANTILE_THREADNUM = 8;
     private static final long QUANTILE_DATA_SIZE = 16000000; //每次查询的总data量，基本等于DATALENGTH / BOUNDARYSIZE * 8
     private static final long ALIGN_MASK = ~(0x7);
