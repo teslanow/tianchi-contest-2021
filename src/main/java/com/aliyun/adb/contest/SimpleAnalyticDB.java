@@ -596,7 +596,6 @@ public class SimpleAnalyticDB implements AnalyticDB {
                     directBuffer.clear();
                     fileChannel[k].read(directBuffer, curReadStart + nowRead);
                     long val = 0;
-                    long position = 0;
                     byte t;
                     long curPos = directBufferBase;
                     long endPos = directBufferBase + realRead;
@@ -621,7 +620,7 @@ public class SimpleAnalyticDB implements AnalyticDB {
                                 int rightIndex = (int)(val >> SHIFTBITNUM);
                                 ByteBuffer byteBuffer = rightBufs[rightIndex];
                                 byteBuffer.putLong(val);
-                                if (position == BYTEBUFFERSIZE) {
+                                if (byteBuffer.position() == BYTEBUFFERSIZE) {
                                     FileChannel fileChannel = rightChannel[k][rightIndex];
                                     AtomicBoolean atomicBoolean = rightChannelSpinLock[k][rightIndex];
                                     byteBuffer.flip();
